@@ -2,7 +2,21 @@
   "version": "0.2.0",
   "configurations": [
     {
+      // Attaches via 127.0.0.1: the extensionHost type fails here because js-debug dials localhost -> ::1.
       "name": "Run Extension",
+      "type": "node",
+      "request": "attach",
+      "address": "127.0.0.1",
+      "port": 9333,
+      "timeout": 30000,
+      "continueOnAttach": true,
+      "outFiles": [
+        "${workspaceFolder}/dist/**/*.js"
+      ],
+      "preLaunchTask": "Launch Extension Host"
+    },
+    {
+      "name": "Run Extension (extensionHost)",
       "type": "extensionHost",
       "request": "launch",
       "args": [

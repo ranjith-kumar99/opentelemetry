@@ -7,6 +7,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-09-28
+
+### Added
+
+- **Ask Copilot about your telemetry (opt-in).** Enable the `otel.ai.enabled` user setting, then ask the new **`@otel`** chat participant questions such as "why is my slowest request slow?". Slash commands: `/slow`, `/errors` and `/agent`. Answers cite trace and span IDs and end with buttons that open the trace, span, logs or source line.
+- **Nine language model tools** for Copilot agent mode and any chat participant: `otel_listServices`, `otel_searchTraces`, `otel_findSpans`, `otel_getTrace`, `otel_compareTraces`, `otel_queryLogs`, `otel_queryMetrics`, `otel_getServiceMap` and `otel_genAiSummary`. Reference them in prompts as `#otelServices`, `#otelTraces`, `#otelSpans`, `#otelTrace`, `#otelCompare`, `#otelLogs`, `#otelMetrics`, `#otelServiceMap` and `#otelAgent`. They cover:
+  - trace search and grouping with p50/p95 and error rates
+  - span self-time
+  - critical path
+  - comparison against a median baseline
+  - log and metric queries
+  - the service graph
+  - AI-agent runs (`gen_ai.*`): LLM vs. tool time, tokens per model, slowest and failed tool calls
+- Settings: `otel.ai.enabled` (default off, user-level only), `otel.ai.redactAttributeKeys` and `otel.ai.maxResultItems`.
+- An **OpenTelemetry AI** output channel. It logs each tool call, and at Debug level the exact text sent to the model.
+- An internal `otel._openSource` command that opens a code location. It uses the same path checks as Navigate To Code.
+- `npm run push:genai` sends a sample AI-agent trace for trying `@otel /agent`.
+
+### Changed
+
+- **Minimum VS Code version is now 1.95.** That is the first release with stable language model tool and chat APIs. In VS Code builds without these APIs, the extension still activates without the AI features.
+- The service map's graph building moved to its own module (`src/views/serviceGraph.ts`). The map itself is unchanged.
+- The packaged extension no longer includes internal docs or TypeScript type files: 536 files instead of 957.
+
+### Security
+
+- AI access is off by default. It can only be enabled in user settings, never by a workspace. Each tool call needs your confirmation in chat.
+- Data is redacted before it is sent:
+  - keys such as `authorization`, `cookie`, `password`, `token`, `secret`, API keys and connection strings
+  - Bearer/Basic credentials, JWTs, AWS, GitHub, Slack and `sk-` keys, private keys, URL passwords and `password=` pairs in any text
+  - Redaction works on copies, so the stored telemetry and the panels are unchanged.
+  - The patterns are fixed and resistant to runaway backtracking (ReDoS), and none come from user input.
+- Prompt and completion text in AI-agent spans is never sent, only its length.
+- Results are size-limited.
+- Telemetry is treated as untrusted input. The tools are read-only, and only this extension's tools are offered to the model. Button arguments come from validated IDs only, never from text the model wrote.
+- No new runtime dependencies.
+
 ## [0.4.0] - 2026-09-25
 
 ### Added

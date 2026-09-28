@@ -2,7 +2,7 @@
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
   "description": "Runtime observability inside VS Code: collect and explore OpenTelemetry logs, metrics, traces, spans, and a service map via an embedded OTLP receiver.",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
   "license": "MIT",
@@ -21,7 +21,7 @@
   "homepage": "https://github.com/sukanta1991/opentelemetry#readme",
   "qna": "marketplace",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.95.0"
   },
   "categories": [
     "Debuggers",
@@ -187,6 +187,11 @@
         "command": "otel._revealLogs",
         "title": "Reveal Correlated Logs",
         "category": "OpenTelemetry"
+      },
+      {
+        "command": "otel._openSource",
+        "title": "Open Source Location",
+        "category": "OpenTelemetry"
       }
     ],
     "menus": {
@@ -197,6 +202,10 @@
         },
         {
           "command": "otel._revealLogs",
+          "when": "false"
+        },
+        {
+          "command": "otel._openSource",
           "when": "false"
         }
       ],
@@ -236,7 +245,8 @@
           "when": "view == otel.instances",
           "group": "2_find@1"
         }
-      ],      "view/item/context": [
+      ],
+      "view/item/context": [
         {
           "command": "otel.openLogs",
           "when": "view == otel.instances && viewItem == otelInstance",
@@ -352,9 +362,365 @@
           "default": 50000,
           "minimum": 1,
           "description": "Maximum number of log records accepted from a single import. Imported logs are exempt from retention limits, so this bounds how much memory one file can consume."
+        },
+        "otel.ai.enabled": {
+          "type": "boolean",
+          "default": false,
+          "scope": "application",
+          "markdownDescription": "Allow Copilot and the `@otel` chat participant to read collected telemetry through the `otel_*` tools. Off by default. Data is redacted and sent only to the language model selected in chat, after you confirm each tool call. This is a user setting: workspace settings cannot enable it."
+        },
+        "otel.ai.redactAttributeKeys": {
+          "type": "array",
+          "default": [],
+          "maxItems": 100,
+          "items": {
+            "type": "string",
+            "maxLength": 128
+          },
+          "markdownDescription": "Extra attribute keys to mask before telemetry is sent to a language model, in addition to the built-in list (authorization, cookie, password, token, secret, api keys, connection strings, …). Matching ignores case, `.`, `-` and `_`, and matches substrings. Built-in keys cannot be removed."
+        },
+        "otel.ai.maxResultItems": {
+          "type": "number",
+          "default": 25,
+          "minimum": 1,
+          "maximum": 200,
+          "description": "Maximum number of items (traces, spans, logs, series, …) a single OpenTelemetry AI tool call may return."
         }
       }
-    }
+    },
+    "languageModelTools": [
+      {
+        "name": "otel_listServices",
+        "displayName": "List OpenTelemetry Services",
+        "toolReferenceName": "otelServices",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "List the applications and instances sending telemetry to the local OTLP receiver.",
+        "modelDescription": "Lists every application (service.name) and instance that has sent telemetry to the local OpenTelemetry receiver running in VS Code: instance IDs, counts of logs, spans, traces and metrics, first/last seen times (ISO UTC), whether each instance is imported from a file, and whether the receiver is running. Use it first to discover service names and instance IDs for the other otel_* tools. Data lives only in in-memory buffers, so old data may have been evicted.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {}
+        }
+      },
+      {
+        "name": "otel_searchTraces",
+        "displayName": "Search OpenTelemetry Traces",
+        "toolReferenceName": "otelTraces",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Find or group recent traces with the trace query syntax.",
+        "modelDescription": "Searches collected traces and returns either rows (traceId, rootName, rootService, start, durationMs, spanCount, errorCount, services) or groups (count, errorCount, errorRate, p50Ms, p95Ms, maxMs, exampleTraceId), plus stats over all matches (count, error traces, error rate, p50/p95/max duration). Use it to find slow or failing requests, compare endpoints, or see how errors change over time (groupBy=time returns 12 time buckets). The query uses the trace list syntax: `status=error`, `dur>500ms` or `dur<2s` (trace duration), `service=checkout`, `name:SELECT` (span name contains) or `name=\"GET /pay\"`, `kind=server`, `http.route=/pay` (attribute contains), `http.status_code>=500`, `has:db.system` or a bare dotted key (attribute present), `-http.route` (attribute absent), `trace:4bf9` (trace id contains); bare words match span names. Span-level terms must all match the same span. Parse problems are returned in queryErrors.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 1000,
+              "description": "Trace query, e.g. \"status=error dur>500ms http.route=/pay\". Optional."
+            },
+            "service": {
+              "type": "string",
+              "description": "Only traces with a span from this service (exact service.name, case-insensitive)."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["error", "ok", "unset"],
+              "description": "Only traces with a span of this status."
+            },
+            "minDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Only traces lasting at least this many milliseconds."
+            },
+            "sinceMinutes": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10080,
+              "description": "Only traces that started within this many minutes before now."
+            },
+            "sort": {
+              "type": "string",
+              "enum": ["recent", "duration", "errors"],
+              "description": "Row order (default recent). For groups: duration sorts by p95, errors by error count, recent by count."
+            },
+            "groupBy": {
+              "type": "string",
+              "description": "Group instead of listing: rootName, rootService, time (12 buckets), or any root-span attribute key such as http.route."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum rows or groups to return (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_findSpans",
+        "displayName": "Find OpenTelemetry Spans",
+        "toolReferenceName": "otelSpans",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Find individual spans across recent traces, with self-time and grouping.",
+        "modelDescription": "Searches individual spans in the newest 1000 traces and returns them with durationMs, selfMs (time not covered by child spans), status, kind, the most useful attributes (http.*, url.*, db.*, rpc.*, messaging.*, gen_ai.*, error.type, server.address, peer.service) and source code location; or groups them by service and/or span name with count, errorCount, totalSelfMs, p50Ms, p95Ms and shareOfSelfTime. Use it to find which operations (e.g. database queries or outbound calls) consume the most time across many requests. The query accepts only span-level terms of the trace query syntax: `service=`, `name:`/`name=`, `status=`, `kind=`, attribute terms such as `db.system=postgresql` or `http.status_code>=500`, `has:key`, `-key`; `dur` and bare words are ignored. minDurationMs and sinceMinutes apply to each span.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "query": {
+              "type": "string",
+              "maxLength": 1000,
+              "description": "Span-level query, e.g. \"db.system=postgresql kind=client\". Optional."
+            },
+            "service": {
+              "type": "string",
+              "description": "Only spans from this service (exact service.name, case-insensitive)."
+            },
+            "status": {
+              "type": "string",
+              "enum": ["error", "ok", "unset"],
+              "description": "Only spans with this status."
+            },
+            "minDurationMs": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Only spans lasting at least this many milliseconds."
+            },
+            "sinceMinutes": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10080,
+              "description": "Only spans that started within this many minutes before now."
+            },
+            "sort": {
+              "type": "string",
+              "enum": ["duration", "selfTime"],
+              "description": "Order by span duration (default) or self-time."
+            },
+            "groupBy": {
+              "type": "string",
+              "enum": ["none", "service", "name", "serviceAndName"],
+              "description": "Group spans instead of listing them (default none)."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum spans or groups to return (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_getTrace",
+        "displayName": "Explain OpenTelemetry Trace",
+        "toolReferenceName": "otelTrace",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Explain one trace: critical path, self-time, errors and correlated logs.",
+        "modelDescription": "Explains a single trace: summary (root, duration, span and error counts, services, orphan spans), the critical path from the longest root down to the leaf that ends last (each step with durationMs, selfMs and pctOfTrace), the 10 spans with the most self-time, error spans with status messages and exception details, self-time per service, and up to 20 correlated logs. Use it to answer why a specific request was slow or failed. Omit traceId for the most recent trace. Pass spanId to zoom into that span's subtree.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "traceId": {
+              "type": "string",
+              "description": "Trace id (32 hex), W3C traceparent, or a unique hex prefix of 8+ characters. Omit for the latest trace."
+            },
+            "spanId": {
+              "type": "string",
+              "description": "Optional span id (16 hex or unique 8+ prefix) to zoom into its subtree."
+            },
+            "includeLogs": {
+              "type": "boolean",
+              "description": "Include up to 20 correlated logs (default true)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_compareTraces",
+        "displayName": "Compare OpenTelemetry Traces",
+        "toolReferenceName": "otelCompare",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Compare a trace with a baseline to see where extra time went.",
+        "modelDescription": "Compares a trace with a baseline and reports the duration ratio and difference, the operations (service + span name) whose self-time grew the most (deltas with target, baseline and ratio), operations new in or missing from the target, and operations that fail only in the target. Without baselineTraceId the baseline is the median of up to 50 recent healthy traces with the same root span name and service. Use it after otel_getTrace to show what is different about a slow request.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "traceId": {
+              "type": "string",
+              "description": "Trace to explain: trace id (32 hex), traceparent, or a unique hex prefix of 8+ characters."
+            },
+            "baselineTraceId": {
+              "type": "string",
+              "description": "Optional specific trace to compare against. Omit to use the median of similar recent traces."
+            }
+          },
+          "required": ["traceId"]
+        }
+      },
+      {
+        "name": "otel_queryLogs",
+        "displayName": "Query OpenTelemetry Logs",
+        "toolReferenceName": "otelLogs",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Search collected logs by service, severity, text, trace or time.",
+        "modelDescription": "Searches collected log records across instances (including logs imported from files), newest first. Returns each log's time, severity, service, instanceId, seq, body, up to 10 attributes, traceId, spanId and code location, plus totalMatched and counts per severity. Use it to find errors or warnings, or the logs of a specific trace or span. text is a case-insensitive substring (not a regex) matched against the body, attributes and severity.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "string",
+              "description": "Only logs from this service (exact service.name, case-insensitive)."
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Only logs from this instance id (as returned by otel_listServices)."
+            },
+            "minSeverity": {
+              "type": "string",
+              "enum": ["trace", "debug", "info", "warn", "error", "fatal"],
+              "description": "Only logs at or above this severity."
+            },
+            "text": {
+              "type": "string",
+              "maxLength": 1000,
+              "description": "Case-insensitive substring to look for; not a regex."
+            },
+            "traceId": {
+              "type": "string",
+              "description": "Only logs correlated with this trace (32 hex, traceparent, or unique prefix)."
+            },
+            "spanId": {
+              "type": "string",
+              "description": "Only logs correlated with this span (16 hex)."
+            },
+            "sinceMinutes": {
+              "type": "number",
+              "minimum": 1,
+              "maximum": 10080,
+              "description": "Only logs from the last this many minutes."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum logs to return (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_queryMetrics",
+        "displayName": "Query OpenTelemetry Metrics",
+        "toolReferenceName": "otelMetrics",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "List metrics, or summarize the series of one metric.",
+        "modelDescription": "Without name: lists metrics per instance (name, type, unit, description, monotonic, series count). With an exact metric name: summarizes every series of that metric (attributes, field, point count, time range, last, min, max, avg, p50, p95, delta, and ratePerSec for monotonic counters). If the name is unknown, the error lists known metric names.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "service": {
+              "type": "string",
+              "description": "Only metrics from this service (exact service.name, case-insensitive)."
+            },
+            "instanceId": {
+              "type": "string",
+              "description": "Only metrics from this instance id."
+            },
+            "name": {
+              "type": "string",
+              "description": "Exact metric name to summarize, e.g. http.server.request.duration. Omit to list metrics."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum metrics or series to return (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_getServiceMap",
+        "displayName": "Get OpenTelemetry Service Map",
+        "toolReferenceName": "otelServiceMap",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Show which services, databases, queues and external hosts call each other.",
+        "modelDescription": "Returns the dependency graph derived from collected spans: nodes (services, databases, queues, external hosts) and edges with call count, error count and error rate, sorted by call count, plus the three edges with the most errors. Use it to understand the architecture or find the failing dependency.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum edges to return (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      },
+      {
+        "name": "otel_genAiSummary",
+        "displayName": "Summarize AI Agent Run",
+        "toolReferenceName": "otelAgent",
+        "canBeReferencedInPrompt": true,
+        "icon": "$(pulse)",
+        "when": "config.otel.ai.enabled",
+        "userDescription": "Summarize an AI-agent trace: time split, tokens, and slowest or failed tool calls.",
+        "modelDescription": "Summarizes a trace instrumented with OpenTelemetry GenAI semantic conventions (gen_ai.* attributes): agent duration, time in LLM calls vs tool calls vs other (parallel calls counted once), input/output tokens overall and per model, each LLM call (model, duration, tokens, status) and tool call (tool name, duration, status, error type), and the slowest and failed calls. Prompt and completion content is never returned, only its length. Omit traceId for the most recent trace with gen_ai attributes.",
+        "inputSchema": {
+          "type": "object",
+          "properties": {
+            "traceId": {
+              "type": "string",
+              "description": "Agent trace id (32 hex, traceparent, or unique prefix). Omit for the latest GenAI trace."
+            },
+            "limit": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "description": "Maximum LLM and tool calls to list (default 25, capped by otel.ai.maxResultItems)."
+            }
+          }
+        }
+      }
+    ],
+    "chatParticipants": [
+      {
+        "id": "otel.chat",
+        "name": "otel",
+        "fullName": "OpenTelemetry",
+        "description": "Ask about traces, logs, metrics and AI-agent runs collected by the local OTLP receiver",
+        "isSticky": true,
+        "commands": [
+          {
+            "name": "slow",
+            "description": "Find the slowest recent request and explain where the time went"
+          },
+          {
+            "name": "errors",
+            "description": "Group recent failing requests by endpoint and explain the top failure"
+          },
+          {
+            "name": "agent",
+            "description": "Summarize the latest AI agent run: time split, tokens, slowest and failed tools"
+          }
+        ]
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",
@@ -367,6 +733,7 @@
     "test:activate": "ts-node test/e2e/activate.test.ts",
     "test:unit": "mocha --require ts-node/register --extensions ts \"test/unit/**/*.test.ts\"",
     "push-logs:out-of-order": "ts-node test/scripts/push-out-of-order-logs.ts",
+    "push:genai": "ts-node test/scripts/push-genai.ts",
     "test": "npm run build && npm run test:unit && npm run test:smoke && npm run test:activate",
     "package": "vsce package",
     "publish": "vsce publish"
@@ -379,7 +746,7 @@
   "devDependencies": {
     "@types/mocha": "^10.0.7",
     "@types/node": "^20.14.0",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "1.95.0",
     "@typescript-eslint/eslint-plugin": "^7.13.0",
     "@typescript-eslint/parser": "^7.13.0",
     "@vscode/test-electron": "^2.4.0",

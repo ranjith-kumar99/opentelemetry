@@ -2,11 +2,15 @@
 // lightweight `vscode` API shim and asserts the extension wires up and starts the
 // receiver. Run with: npx ts-node test/e2e/activate.test.ts
 import * as assert from 'assert';
+import * as fs from 'fs';
 import Module = require('module');
 import * as path from 'path';
 
 const registeredCommands = new Map<string, (...args: any[]) => any>();
 const executeLog: any[][] = [];
+const registeredTools: string[] = [];
+const participants: string[] = [];
+const outputChannels: string[] = [];
 let statusText = '';
 let treeViewId = '';
 let debugProviderType = '';
@@ -40,8 +44,32 @@ const fakeVscode: any = {
   TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
   StatusBarAlignment: { Left: 1, Right: 2 },
   ViewColumn: { Active: -1, Beside: -2, One: 1 },
-  Uri: { file: (p: string) => ({ fsPath: p, path: p }) },
+  Uri: {
+    file: (p: string) => ({ fsPath: p, path: p }),
+    joinPath: (base: { fsPath: string }, ...parts: string[]) => {
+      const p = path.join(base.fsPath, ...parts);
+      return { fsPath: p, path: p };
+    },
+  },
+  lm: {
+    tools: [],
+    registerTool: (name: string) => {
+      registeredTools.push(name);
+      return { dispose() {} };
+    },
+  },
+  chat: {
+    createChatParticipant: (id: string) => {
+      participants.push(id);
+      return { id, iconPath: undefined, dispose() {} };
+    },
+  },
   window: {
+    createOutputChannel: (name: string, options?: { log?: boolean }) => {
+      assert.deepStrictEqual(options, { log: true }, 'log-style output channel');
+      outputChannels.push(name);
+      return { name, info() {}, debug() {}, warn() {}, error() {}, trace() {}, appendLine() {}, show() {}, dispose() {} };
+    },
     createStatusBarItem: () => ({
       show() {},
       dispose() {},
@@ -137,9 +165,24 @@ async function main() {
     'otel.findTrace',
     'otel._revealTrace',
     'otel._revealLogs',
+    'otel._openSource',
   ]) {
     assert.ok(registeredCommands.has(cmd), `command registered: ${cmd}`);
   }
+
+  // AI tools and participant
+  const pkg = JSON.parse(fs.readFileSync(path.join(extPath, 'package.json'), 'utf8'));
+  assert.deepStrictEqual(
+    registeredTools,
+    pkg.contributes.languageModelTools.map((t: any) => t.name),
+    'all contributed tools registered'
+  );
+  assert.strictEqual(registeredTools.length, 9);
+  assert.deepStrictEqual(participants, ['otel.chat'], 'chat participant registered');
+  assert.deepStrictEqual(outputChannels, ['OpenTelemetry AI'], 'AI output channel created once');
+  // Invalid _openSource arguments are ignored without opening anything.
+  await registeredCommands.get('otel._openSource')!({ filepath: 42 });
+  await registeredCommands.get('otel._openSource')!(undefined);
 
   assert.strictEqual(treeViewId, 'otel.instances', 'tree view created');
   assert.strictEqual(debugProviderType, '*', 'debug provider registered');
@@ -154,6 +197,22 @@ async function main() {
   assert.ok(context.subscriptions.length > 5, 'disposables registered');
 
   ext.deactivate();
+
+  // Second pass: VS Code forks without language model or chat APIs still activate.
+  delete fakeVscode.lm;
+  delete fakeVscode.chat;
+  registeredCommands.clear();
+  registeredTools.length = 0;
+  participants.length = 0;
+  const plain = { extensionPath: extPath, subscriptions: [] as any[] };
+  await ext.activate(plain);
+  for (const cmd of ['otel.start', 'otel.openTraces', 'otel._revealTrace', 'otel._openSource']) {
+    assert.ok(registeredCommands.has(cmd), `command registered without AI APIs: ${cmd}`);
+  }
+  assert.deepStrictEqual(registeredTools, [], 'no tools without vscode.lm');
+  assert.deepStrictEqual(participants, [], 'no participant without vscode.chat');
+  ext.deactivate();
+
   console.log('ACTIVATION OK');
   // Give the receiver a moment to shut down, then exit.
   setTimeout(() => process.exit(0), 300);

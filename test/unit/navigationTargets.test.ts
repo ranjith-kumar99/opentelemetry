@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { Span } from '../../src/store/model';
 import { TelemetryStore } from '../../src/store/store';
-import { parseTraceIdInput, parseTraceTarget, pickTraceInstance } from '../../src/views/navigationTargets';
+import { parseSourceTarget, parseTraceIdInput, parseTraceTarget, pickTraceInstance } from '../../src/views/navigationTargets';
 
 const TRACE = '4bf92f3577b34da6a3ce929d0e0e4736';
 const SPAN = '00f067aa0ba902b7';
@@ -58,6 +58,32 @@ describe('navigationTargets', () => {
       assert.strictEqual(parseTraceIdInput(''), undefined);
       assert.strictEqual(parseTraceIdInput('hello'), undefined);
       assert.strictEqual(parseTraceIdInput(`00-${TRACE}-${SPAN}`), undefined);
+    });
+  });
+
+  describe('parseSourceTarget', () => {
+    it('keeps a valid location', () => {
+      assert.deepStrictEqual(parseSourceTarget({ filepath: '/srv/app.py', line: 42, column: 3, function: 'main' }), {
+        filepath: '/srv/app.py',
+        line: 42,
+        column: 3,
+        function: 'main',
+      });
+    });
+
+    it('drops invalid optional fields', () => {
+      assert.deepStrictEqual(parseSourceTarget({ filepath: 'app.py', line: 0, column: 1.5, function: 7, extra: 'x' }), {
+        filepath: 'app.py',
+        line: undefined,
+        column: undefined,
+        function: undefined,
+      });
+    });
+
+    it('rejects a missing, empty, non-string or over-long path', () => {
+      for (const raw of [undefined, null, 'app.py', {}, { filepath: '' }, { filepath: '  ' }, { filepath: 3 }, { filepath: 'x'.repeat(4097) }]) {
+        assert.strictEqual(parseSourceTarget(raw), undefined, JSON.stringify(raw));
+      }
     });
   });
 
