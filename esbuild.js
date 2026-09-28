@@ -31,7 +31,29 @@ const copyAssetsPlugin = {
   },
 };
 
+// Prints the markers and "file:line:col: error: msg" lines the npm: watch task's problem matcher
+// reads, so F5 knows when a build has finished. Shared by both contexts.
+let pendingBuilds = 0;
+const watchReporterPlugin = {
+  name: 'watch-reporter',
+  setup(build) {
+    build.onStart(() => {
+      if (pendingBuilds++ === 0) console.log('[watch] build started');
+    });
+    build.onEnd((result) => {
+      const report = (severity) => ({ text, location }) => {
+        const where = location ? `${location.file}:${location.line}:${location.column + 1}` : 'esbuild.js:1:1';
+        console.error(`${where}: ${severity}: ${text}`);
+      };
+      result.errors.forEach(report('error'));
+      result.warnings.forEach(report('warning'));
+      if (--pendingBuilds === 0) console.log('[watch] build finished');
+    });
+  },
+};
+
 async function main() {
+  const reporter = watch ? [watchReporterPlugin] : [];
   const ctx = await esbuild.context({
     entryPoints: ['src/extension.ts'],
     bundle: true,
@@ -43,7 +65,7 @@ async function main() {
     sourcemap: !production,
     minify: production,
     logLevel: 'info',
-    plugins: [copyAssetsPlugin],
+    plugins: [copyAssetsPlugin, ...reporter],
   });
 
   // Separate browser bundles for the panel webviews (metrics charts, logs table, traces table).
@@ -61,6 +83,7 @@ async function main() {
     sourcemap: !production,
     minify: production,
     logLevel: 'info',
+    plugins: reporter,
   });
 
   if (watch) {

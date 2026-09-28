@@ -10,7 +10,7 @@ extra containers. Point any OTLP-compatible SDK at the receiver and your telemet
 editor, grouped by service and instance. Data is kept **in memory** and cleared when the receiver
 restarts.
 
-[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.4.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
+[![VS Code Marketplace](https://img.shields.io/badge/VS%20Code%20Marketplace-v0.5.0-blue?logo=visualstudiocode)](https://marketplace.visualstudio.com/items?itemName=SukantaSaha.opentelemetry)
 [![CI](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml/badge.svg)](https://github.com/sukanta1991/opentelemetry/actions/workflows/ci.yml)
 ![License](https://img.shields.io/badge/license-MIT-green)
 
@@ -81,6 +81,7 @@ Service map — services, databases, queues, and external dependencies inferred 
   - Charts use VS Code theme colors, abbreviate large axis values (e.g. `270k`, `2.8M`), and truncate long series labels with a full-text tooltip on hover. History depth is bounded by `otel.retention.maxMetricPointsPerSeries`.
 - **Service map** — services, databases, queues, and external dependencies inferred from spans.
 - **Instances tree** — applications grouped by `service.name`, each with its own instances.
+- **Ask Copilot** (opt-in) — the `@otel` chat participant and nine `otel_*` tools answer questions about your traces, logs, metrics and AI-agent runs, with buttons back to the data. See [Ask Copilot about your telemetry](#ask-copilot-about-your-telemetry).
 
 Works with any OTLP-compatible SDK — **Java, .NET, Go, Node.js, Python, Rust**, and others.
 
@@ -151,6 +152,50 @@ Going the other way works too: select a log and click **View Trace** (or click i
 1. Generate distributed traffic (HTTP calls, database queries, queue messages).
 2. Open the **Service Map** to see services, databases, and queues and how they connect.
 
+## Ask Copilot about your telemetry
+
+Ask questions in chat such as *"why is my slowest request slow?"* or *"what did my AI agent spend its time on?"*. The answers are computed from the data the receiver holds, and each one comes with buttons that open the trace, span, logs or source line it refers to.
+
+**Turn it on.** AI access is **off by default**. Enable the `otel.ai.enabled` **user** setting (Settings → search "otel.ai"). A workspace `settings.json` cannot turn it on, so a cloned repository can't enable it for you.
+
+**Use `@otel` in chat:**
+
+| Ask | What happens |
+| --- | --- |
+| `@otel why is my slowest request slow?` | Finds the request, walks its critical path, compares it with similar requests and cites trace and span IDs. |
+| `@otel /slow` | Finds the slowest recent request and explains where the time went. |
+| `@otel /errors` | Groups recent failing requests by endpoint and explains the top failure. |
+| `@otel /agent` | Summarizes the latest AI-agent run: LLM vs. tool time, token usage, slowest and failed tools. |
+
+**In agent mode**, or with any chat participant, reference the tools directly with `#`, e.g. *"#otelTraces show failing checkout requests from the last 10 minutes"*.
+
+| Tool | Reference | Returns |
+| --- | --- | --- |
+| `otel_listServices` | `#otelServices` | Applications, instances and what each holds |
+| `otel_searchTraces` | `#otelTraces` | Traces matching the [trace query syntax](#trace-query-syntax), listed or grouped (by root, service, time or a root attribute), with p50/p95 and error rate |
+| `otel_findSpans` | `#otelSpans` | Spans across recent traces with self-time, optionally grouped by service and name |
+| `otel_getTrace` | `#otelTrace` | One trace: critical path, top self-time spans, errors, time per service, correlated logs |
+| `otel_compareTraces` | `#otelCompare` | Where a trace spent more time than a baseline (explicit or the median of similar traces) |
+| `otel_queryLogs` | `#otelLogs` | Logs by service, severity, text, trace or time, newest first |
+| `otel_queryMetrics` | `#otelMetrics` | Metric list, or per-series last/min/max/avg/p50/p95 and counter rates |
+| `otel_getServiceMap` | `#otelServiceMap` | Service dependencies with call counts and error rates |
+| `otel_genAiSummary` | `#otelAgent` | An AI-agent trace (OpenTelemetry `gen_ai.*` conventions): time split, tokens per model, slowest and failed calls |
+
+**Privacy**
+
+- **Opt-in and confirmed.** Nothing is read until you enable `otel.ai.enabled`, and VS Code asks before each tool call. You can choose to always allow a tool.
+- **Your model, your choice.** Results go only to the language model selected in the chat model picker. That includes bring-your-own-key and local models (for example Ollama) configured in VS Code. The extension makes no network calls and stores no API keys.
+- **Redacted first.** Before anything is sent:
+  - Values of keys such as `authorization`, `cookie`, `password`, `token`, `secret`, API keys and connection strings are masked.
+  - Bearer/Basic credentials, JWTs, AWS, GitHub, Slack and `sk-` keys, private keys, URL passwords and `password=` pairs are masked in any text.
+  - You can add keys with `otel.ai.redactAttributeKeys`, but never remove the built-in ones.
+  - Prompt and completion text from AI-agent spans (`gen_ai.prompt`, `gen_ai.input.messages`, …) is never sent, only its length.
+- **Bounded.** Each result is capped at `otel.ai.maxResultItems` items and 24,000 characters.
+- **Transparent.** Open the **OpenTelemetry AI** output channel and set its log level to **Debug** (gear icon → Set Log Level) to see the exact text sent for every call.
+- **Telemetry is treated as untrusted.** The tools are read-only. The model is told never to follow instructions found in telemetry, and buttons are built only from IDs the extension validated, never from text the model wrote.
+
+**Limits.** Answers only cover what is still in the in-memory buffers. Older data may have been evicted (see the `otel.retention.*` settings), and span searches look at the newest 1000 traces. Requires VS Code 1.95 or later, and a chat model that supports tool calling.
+
 ## Trace query syntax
 
 The Traces query bar combines with the toolbar filters; every term must match. Terms are separated by spaces (or commas); quote values containing spaces, e.g. `name="GET /api"`.
@@ -206,6 +251,9 @@ Instance** action.
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
 | `otel.import.maxFileSize` | `200` | Largest log file (MB) accepted by **Import Logs**. Checked before the file is read. |
 | `otel.import.maxRecords` | `50000` | Most records accepted from one import. Imported logs bypass retention, so this bounds their memory use. |
+| `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
+| `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
+| `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
 
 Example `settings.json`:
 
@@ -290,7 +338,7 @@ npm test          # unit + smoke + activation tests
 npm run package   # produce a .vsix
 ```
 
-To try trace ↔ log correlation without an instrumented app, start the receiver and run `npx ts-node test/scripts/push-correlated.ts` (add `--bulk` for 2000 traces × 50 spans).
+To try trace ↔ log correlation without an instrumented app, start the receiver and run `npx ts-node test/scripts/push-correlated.ts` (add `--bulk` for 2000 traces × 50 spans). For `@otel /agent`, run `npm run push:genai` to send a sample AI-agent trace.
 
 Press **F5** to launch the Extension Development Host.
   

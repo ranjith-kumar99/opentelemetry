@@ -1,6 +1,7 @@
 // Pure target resolution for cross-panel navigation. No vscode import so it can be unit-tested.
 
 import { normalizeSpanId, normalizeTraceId } from '../store/ids';
+import { CodeLocation } from '../store/model';
 import { TelemetryStore } from '../store/store';
 
 export interface TraceTarget {
@@ -28,6 +29,19 @@ export function parseTraceIdInput(text: string): TraceTarget | undefined {
   const tp = TRACEPARENT.exec(t);
   if (tp) return target(normalizeTraceId(tp[1]), tp[2]);
   return target(normalizeTraceId(t), undefined);
+}
+
+const MAX_SOURCE_PATH = 4096;
+const MAX_SOURCE_FUNCTION = 256;
+
+// Argument of otel._openSource. Invalid line/column/function are dropped; an invalid path rejects it.
+export function parseSourceTarget(raw: unknown): CodeLocation | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const r = raw as Record<string, unknown>;
+  if (typeof r.filepath !== 'string' || !r.filepath.trim() || r.filepath.length > MAX_SOURCE_PATH) return undefined;
+  const pos = (v: unknown) => (Number.isSafeInteger(v) && (v as number) > 0 ? (v as number) : undefined);
+  const fn = typeof r.function === 'string' && r.function.length <= MAX_SOURCE_FUNCTION ? r.function : undefined;
+  return { filepath: r.filepath, line: pos(r.line), column: pos(r.column), function: fn };
 }
 
 // Prefers the caller's instance, then the one holding the earliest root span, then the first.

@@ -1,14 +1,17 @@
 import * as vscode from 'vscode';
+import { registerOtelParticipant } from './ai/participant';
+import { registerAiTools } from './ai/tools';
 import { OtelController } from './controller';
 import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
 import { readSettings } from './settings';
+import { openCodeLocation } from './views/codeNav';
 import { InstanceNode, InstancesTreeProvider } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
 import { revealLogs, revealTrace } from './views/navigation';
-import { parseTraceIdInput, parseTraceTarget } from './views/navigationTargets';
+import { parseSourceTarget, parseTraceIdInput, parseTraceTarget } from './views/navigationTargets';
 import { ServiceMapPanel } from './views/serviceMapPanel';
 import { TracesPanel } from './views/tracesPanel';
 
@@ -98,8 +101,17 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         });
       }
     }),
+    vscode.commands.registerCommand('otel._openSource', async (arg: unknown) => {
+      const loc = parseSourceTarget(arg);
+      if (loc) await openCodeLocation(loc);
+    }),
     vscode.commands.registerCommand('otel.findTrace', () => findTrace())
   );
+
+  const aiLog = vscode.window.createOutputChannel('OpenTelemetry AI', { log: true });
+  context.subscriptions.push(aiLog);
+  registerAiTools(context, controller, aiLog);
+  registerOtelParticipant(context, controller, aiLog);
 
   context.subscriptions.push(
     vscode.debug.registerDebugConfigurationProvider('*', new OtelDebugConfigProvider(controller))

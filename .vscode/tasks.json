@@ -4,7 +4,23 @@
     {
       "type": "npm",
       "script": "watch",
-      "problemMatcher": "$esbuild-watch",
+      "problemMatcher": {
+        "owner": "esbuild",
+        "fileLocation": ["relative", "${workspaceFolder}"],
+        "pattern": {
+          "regexp": "^(.+?):(\\d+):(\\d+): (error|warning): (.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        },
+        "background": {
+          "activeBegins": true,
+          "beginsPattern": "^\\[watch\\] build started",
+          "endsPattern": "^\\[watch\\] build finished$"
+        }
+      },
       "isBackground": true,
       "presentation": {
         "reveal": "never"
@@ -12,6 +28,21 @@
       "group": {
         "kind": "build",
         "isDefault": true
+      }
+    },
+    {
+      "label": "Launch Extension Host",
+      "type": "shell",
+      "command": "code",
+      "args": [
+        "--new-window",
+        "--extensionDevelopmentPath=${workspaceFolder}",
+        "--inspect-brk-extensions=9333"
+      ],
+      "dependsOn": "npm: watch",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "silent"
       }
     }
   ]

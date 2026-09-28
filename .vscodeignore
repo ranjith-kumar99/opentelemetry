@@ -14,6 +14,11 @@ CONTRIBUTING.md
 CODE_OF_CONDUCT.md
 *.vsix
 images/screenshots/**
+node_modules/**/*.d.ts
+node_modules/**/*.d.ts.map
+node_modules/**/*.ts
+node_modules/@grpc/grpc-js/src/**
+node_modules/undici-types/**
 node_modules/typescript/**
 node_modules/esbuild/**
 node_modules/@esbuild/**

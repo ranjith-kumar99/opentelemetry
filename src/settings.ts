@@ -1,4 +1,6 @@
 import * as vscode from 'vscode';
+import { AiSettings, sanitizeAiSettings } from './ai/aiSettings';
+import { DEFAULT_MAX_ITEMS } from './ai/limits';
 import { ReceiverConfig } from './receiver/receiver';
 
 export interface OtelSettings extends ReceiverConfig {
@@ -27,4 +29,15 @@ export function readSettings(): OtelSettings {
     importMaxFileSizeMb: Math.max(1, c.get<number>('import.maxFileSize', 200)),
     importMaxRecords: Math.max(1, c.get<number>('import.maxRecords', 50000)),
   };
+}
+
+export function readAiSettings(): AiSettings {
+  const c = vscode.workspace.getConfiguration('otel');
+  // Only the user-level value can enable AI access; workspace values are ignored even if present.
+  const enabled = typeof c.inspect === 'function' ? c.inspect<boolean>('ai.enabled')?.globalValue : c.get<boolean>('ai.enabled');
+  return sanitizeAiSettings({
+    enabled,
+    redactAttributeKeys: c.get<unknown>('ai.redactAttributeKeys', []),
+    maxResultItems: c.get<unknown>('ai.maxResultItems', DEFAULT_MAX_ITEMS),
+  });
 }
