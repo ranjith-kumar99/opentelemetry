@@ -31,6 +31,7 @@ What actually happened.
 - **Exporter Configuration**: (e.g., gRPC endpoint, HTTP endpoint, environment variables)
 
 ## Additional Context
-Add any other context, screenshots, logs, or error messages from the OpenTelemetry output channel:
-- Open the output panel and select the "OpenTelemetry" channel
-- Copy relevant error messages or diagnostics
+Add any other context, screenshots, or error messages shown by the extension.
+For `@otel` or `otel_*` tool issues, include output from the "OpenTelemetry AI" output channel.
+
+**Remove secrets and sensitive telemetry before posting. Report security vulnerabilities privately, see SECURITY.md.**

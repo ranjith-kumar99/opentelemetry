@@ -12,6 +12,7 @@ tsconfig.webview.json
 **/*.map
 CONTRIBUTING.md
 CODE_OF_CONDUCT.md
+SECURITY.md
 *.vsix
 images/screenshots/**
 node_modules/**/*.d.ts
