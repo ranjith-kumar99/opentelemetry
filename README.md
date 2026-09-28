@@ -85,19 +85,19 @@ See [Features in depth](#features-in-depth) for the full list.
 
 ## Screenshots
 
-Traces and spans: find slow or failing requests, open one as a waterfall of spans across every service it touched, and inspect a span's status, IDs, and attributes in the details pane:
+**Traces and spans:** find slow or failing requests, open one as a waterfall of spans across every service it touched, and inspect a span's status, IDs, and attributes in the details pane:
 
 ![Traces panel with a request waterfall and span details](images/screenshots/trace.png)
 
-Logs: search and filter, choose which columns to show (including any attribute promoted to its own sortable column), then jump straight to the source line:
+**Logs:** search and filter, choose which columns to show (including any attribute promoted to its own sortable column), then jump straight to the source line:
 
 ![Logs panel with the column picker](images/screenshots/logs-columns.png)
 
-Service map: services, databases, queues, and external dependencies inferred from spans:
+**Service map:** services, databases, queues, and external dependencies inferred from spans:
 
 ![Service map](images/screenshots/service-map.png)
 
-Metrics: the **Graph** view renders each metric as a chart, with per-graph dropdowns for the chart type, the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
+**Metrics:** the **Graph** view renders each metric as a chart, with per-graph dropdowns for the chart type, the **Over time** aggregation, and the **Series** roll-up, plus a shared time range and step:
 
 ![Metrics graph view](images/screenshots/metrics-graphs.png)
 
@@ -147,7 +147,7 @@ Going the other way works too: select a log and click **View Trace** (or click i
 
 1. Open **Logs** and narrow the table with the search, level, attribute, and time-range controls.
 2. Optionally select specific rows (Cmd/Ctrl+click, or Shift+click for a range).
-3. Click **Export…**, pick a format and scope, and save the file.
+3. Click **Export**, pick a format and scope, and save the file.
 4. Your teammate runs **OpenTelemetry: Import Logs From File** to open it under **Imported** — read-only, retention-exempt, and unaffected by **Clear Collected Data**.
 
 **Bring in logs from another vendor**
