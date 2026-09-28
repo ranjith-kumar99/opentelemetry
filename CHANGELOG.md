@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- README reorganised: why and when to use the extension, features at a glance, a privacy and data-handling section, and a comparison with Jaeger and Grafana. The detailed feature list moved further down.
+- Added `SECURITY.md` and `SUPPORT.md`.
+
 ## [0.5.0] - 2026-09-28
 
 ### Added

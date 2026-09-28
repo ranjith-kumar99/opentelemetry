@@ -1,7 +1,7 @@
 {
   "name": "opentelemetry",
   "displayName": "OpenTelemetry",
-  "description": "Runtime observability inside VS Code: collect and explore OpenTelemetry logs, metrics, traces, spans, and a service map via an embedded OTLP receiver.",
+  "description": "OpenTelemetry debugging inside VS Code: an embedded OTLP receiver for logs, traces, metrics and a service map, with no Collector or Jaeger to run. Optional Copilot investigation.",
   "version": "0.5.0",
   "publisher": "SukantaSaha",
   "author": "Sukanta Saha",
@@ -30,6 +30,7 @@
   ],
   "keywords": [
     "opentelemetry",
+    "otel",
     "otlp",
     "observability",
     "tracing",
@@ -43,6 +44,9 @@
     "jaeger",
     "zipkin",
     "grafana",
+    "trace viewer",
+    "log viewer",
+    "copilot",
     "developer tools"
   ],
   "main": "./dist/extension.js",
