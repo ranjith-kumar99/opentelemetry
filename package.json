@@ -15,6 +15,9 @@
     "type": "git",
     "url": "https://github.com/sukanta1991/opentelemetry"
   },
+  "sponsor": {
+      "url": "https://github.com/sponsors/sukanta1991"
+  },
   "bugs": {
     "url": "https://github.com/sukanta1991/opentelemetry/issues"
   },
