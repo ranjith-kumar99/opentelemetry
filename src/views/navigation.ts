@@ -17,6 +17,7 @@ export interface RevealLogsArgs {
   spanId?: string;
   instanceId?: string;
   focusSeq?: number;
+  realm?: string;
 }
 
 export function revealTrace(controller: OtelController, args: RevealTraceArgs): void {
@@ -49,7 +50,7 @@ export async function revealLogs(controller: OtelController, args: RevealLogsArg
     return;
   }
 
-  const counts = [...store.countLogsByInstance(traceId, spanId)];
+  const counts = [...store.countLogsByInstance(traceId, spanId, args.realm)];
   if (!counts.length) {
     const what = spanId ? `span ${shortId(spanId)}` : `trace ${shortId(traceId)}`;
     vscode.window.showInformationMessage(

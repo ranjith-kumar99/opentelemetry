@@ -27,12 +27,16 @@ export interface MetricSeries {
   points: RingBuffer<MetricSeriesPoint>;
 }
 
+// Realm of received data; each loaded file gets its own realm so its traces never merge with others.
+export const LIVE_REALM = 'live';
+
 export interface Instance {
   id: string;
   serviceName: string;
   serviceInstanceId?: string;
   resourceAttrs: KeyValueMap;
   kind: InstanceKind;
+  realm: string;
   // Display label for imported instances (the source filename).
   source?: string;
   logs: RingBuffer<StoredLogRecord>;
@@ -59,6 +63,24 @@ export interface ImportLogsOptions {
   resourceAttrs: KeyValueMap;
   logs: LogRecord[];
   sourceLabel: string;
+}
+
+export interface ImportSessionOptions {
+  sourceLabel: string;
+  traces: ResourceSpans[];
+  logs: ResourceLogs[];
+  metrics: ResourceMetrics[];
+}
+
+export interface ImportedSession {
+  id: string;
+  source: string;
+  loadedAt: number;
+}
+
+export interface ImportedSessionView {
+  session: ImportedSession;
+  instances: Instance[];
 }
 
 export interface Application {
@@ -91,8 +113,13 @@ export interface TraceLogs {
 
 type Listener = () => void;
 
+export function attrsKey(attrs: KeyValueMap): string {
+  return JSON.stringify(Object.keys(attrs).sort().map((k) => [k, attrs[k]]));
+}
+
 export class TelemetryStore {
   private instances = new Map<string, Instance>();
+  private sessions = new Map<string, ImportedSession>();
   private listeners = new Set<Listener>();
   private fireTimer: NodeJS.Timeout | undefined;
   private maxLogs: number;
@@ -165,6 +192,26 @@ export class TelemetryStore {
       .sort((a, b) => b.firstSeen - a.firstSeen);
   }
 
+  getSession(id: string): ImportedSession | undefined {
+    return this.sessions.get(id);
+  }
+
+  /** Loaded files, newest first, each with its instances. */
+  getImportedSessions(): ImportedSessionView[] {
+    const out: ImportedSessionView[] = [];
+    for (const session of this.sessions.values()) {
+      const instances = this.realmInstances(session.id).sort(
+        (a, b) => a.serviceName.localeCompare(b.serviceName) || a.id.localeCompare(b.id)
+      );
+      if (instances.length) out.push({ session, instances });
+    }
+    return out.sort((a, b) => b.session.loadedAt - a.session.loadedAt);
+  }
+
+  private realmInstances(realm: string): Instance[] {
+    return [...this.instances.values()].filter((i) => i.realm === realm);
+  }
+
   getInstance(id: string): Instance | undefined {
     return this.instances.get(id);
   }
@@ -205,9 +252,19 @@ export class TelemetryStore {
   }
 
   removeInstance(id: string): void {
-    if (this.instances.delete(id)) {
-      this.scheduleFire();
+    const inst = this.instances.get(id);
+    if (!inst) return;
+    this.instances.delete(id);
+    if (inst.kind === 'imported' && !this.realmInstances(inst.realm).length) {
+      this.sessions.delete(inst.realm);
     }
+    this.scheduleFire();
+  }
+
+  removeSession(id: string): void {
+    if (!this.sessions.delete(id)) return;
+    for (const inst of this.realmInstances(id)) this.instances.delete(inst.id);
+    this.scheduleFire();
   }
 
   clear(): void {
@@ -246,6 +303,7 @@ export class TelemetryStore {
         serviceInstanceId: resource.serviceInstanceId,
         resourceAttrs: resource.attrs,
         kind: 'live',
+        realm: LIVE_REALM,
         logs: new RingBuffer<StoredLogRecord>(this.maxLogs),
         nextLogSeq: 1,
         traces: new Map(),
@@ -288,39 +346,122 @@ export class TelemetryStore {
     return stored;
   }
 
-  // Creates a read-only instance backed by a file. Retention-exempt and not removed by clear().
-  importLogs(opts: ImportLogsOptions): string {
+  private newSession(source: string): ImportedSession {
+    const now = Date.now();
     const hash = createHash('sha1')
-      .update(opts.sourceLabel)
-      .update(String(Date.now()))
+      .update(source)
+      .update(String(now))
       .update(String(this.importCounter++))
       .digest('hex')
       .slice(0, 8);
-    const id = `imported::${opts.sourceLabel}::${hash}`;
-    const now = Date.now();
-    const inst: Instance = {
+    const session: ImportedSession = { id: `imported::${source}::${hash}`, source, loadedAt: now };
+    this.sessions.set(session.id, session);
+    return session;
+  }
+
+  // Imported instances are read-only, retention-exempt and not removed by clear().
+  private newImportedInstance(
+    session: ImportedSession,
+    id: string,
+    serviceName: string,
+    serviceInstanceId: string | undefined,
+    resourceAttrs: KeyValueMap
+  ): Instance {
+    return {
       id,
-      serviceName: opts.serviceName,
-      resourceAttrs: opts.resourceAttrs,
+      serviceName,
+      serviceInstanceId,
+      resourceAttrs,
       kind: 'imported',
-      source: opts.sourceLabel,
+      realm: session.id,
+      source: session.source,
       logs: new RingBuffer<StoredLogRecord>(0),
       nextLogSeq: 1,
       traces: new Map(),
       metrics: new Map(),
       metricSeries: new Map(),
-      firstSeen: now,
-      lastSeen: now,
+      firstSeen: session.loadedAt,
+      lastSeen: session.loadedAt,
       logCount: 0,
       spanCount: 0,
     };
+  }
+
+  importLogs(opts: ImportLogsOptions): string {
+    const session = this.newSession(opts.sourceLabel);
+    const inst = this.newImportedInstance(session, session.id, opts.serviceName, undefined, opts.resourceAttrs);
     for (const log of opts.logs) {
       inst.logs.push(this.withSeq(inst, log));
       inst.logCount++;
     }
-    this.instances.set(id, inst);
+    this.instances.set(inst.id, inst);
     this.scheduleFire();
-    return id;
+    return inst.id;
+  }
+
+  /** Loads traces, logs and metrics from one file into a new realm, one instance per resource. */
+  importSession(opts: ImportSessionOptions): { sessionId: string; instanceIds: string[] } {
+    const session = this.newSession(opts.sourceLabel);
+    const byResource = new Map<string, Instance>();
+    const instanceFor = (resource: ResourceInfo): Instance => {
+      const key = this.instanceId(resource);
+      let inst = byResource.get(key);
+      if (!inst) {
+        inst = this.newImportedInstance(
+          session,
+          `${session.id}::${key}`,
+          resource.serviceName,
+          resource.serviceInstanceId,
+          resource.attrs
+        );
+        byResource.set(key, inst);
+      }
+      return inst;
+    };
+
+    for (const b of opts.traces) {
+      const inst = instanceFor(b.resource);
+      for (const span of b.spans) {
+        if (!span.traceId || !span.spanId) continue;
+        this.addSpan(inst, span);
+        inst.spanCount++;
+      }
+    }
+    for (const b of opts.logs) {
+      const inst = instanceFor(b.resource);
+      for (const log of b.logs) {
+        inst.logs.push(this.withSeq(inst, log));
+        inst.logCount++;
+      }
+    }
+
+    // A file may repeat a metric across batches; merge, then replay points in time order.
+    const metrics = new Map<Instance, Map<string, Metric>>();
+    for (const b of opts.metrics) {
+      const inst = instanceFor(b.resource);
+      let byName = metrics.get(inst);
+      if (!byName) metrics.set(inst, (byName = new Map()));
+      for (const m of b.metrics) {
+        const existing = byName.get(m.name);
+        if (existing) existing.dataPoints.push(...m.dataPoints);
+        else byName.set(m.name, { ...m, dataPoints: [...m.dataPoints] });
+      }
+    }
+    for (const [inst, byName] of metrics) {
+      for (const m of byName.values()) {
+        m.dataPoints.sort((a, b) => a.timeMs - b.timeMs);
+        this.recordSeries(inst, m);
+        const latest = new Map<string, Metric['dataPoints'][number]>();
+        for (const dp of m.dataPoints) latest.set(attrsKey(dp.attrs), dp);
+        m.dataPoints = [...latest.values()];
+        inst.metrics.set(m.name, m);
+      }
+    }
+
+    if (!byResource.size) this.sessions.delete(session.id);
+    for (const inst of byResource.values()) this.instances.set(inst.id, inst);
+    this.scheduleFire();
+    return { sessionId: session.id, instanceIds: [...byResource.values()].map((i) => i.id) };
   }
 
   ingestSpans(batches: ResourceSpans[], peer?: string): void {
@@ -432,7 +573,8 @@ export class TelemetryStore {
     const key = this.seriesKey(metricName, attrs, field);
     let series = inst.metricSeries.get(key);
     if (!series) {
-      if (inst.metricSeries.size >= this.maxMetricSeries) {
+      const imported = inst.kind === 'imported';
+      if (!imported && inst.metricSeries.size >= this.maxMetricSeries) {
         const oldest = inst.metricSeries.keys().next().value as string | undefined;
         if (oldest !== undefined) inst.metricSeries.delete(oldest);
       }
@@ -440,7 +582,7 @@ export class TelemetryStore {
         metricName,
         attrs,
         field,
-        points: new RingBuffer<MetricSeriesPoint>(this.maxMetricPoints),
+        points: new RingBuffer<MetricSeriesPoint>(imported ? 0 : this.maxMetricPoints),
       };
       inst.metricSeries.set(key, series);
     }
@@ -478,9 +620,10 @@ export class TelemetryStore {
   }
 
   /** Merge spans for a trace id across all instances, tagging each with its service. */
-  getSpansForTrace(traceId: string): TaggedSpan[] {
+  getSpansForTrace(traceId: string, realm?: string): TaggedSpan[] {
     const out: TaggedSpan[] = [];
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       const trace = inst.traces.get(traceId);
       if (!trace) continue;
       for (const span of trace.spans.values()) {
@@ -491,9 +634,10 @@ export class TelemetryStore {
   }
 
   /** All spans across all instances, tagged with service name (for the service map). */
-  getAllTaggedSpans(): TaggedSpan[] {
+  getAllTaggedSpans(realm?: string): TaggedSpan[] {
     const out: TaggedSpan[] = [];
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       for (const trace of inst.traces.values()) {
         for (const span of trace.spans.values()) {
           out.push({ span, serviceName: inst.serviceName, instanceId: inst.id });
@@ -503,17 +647,19 @@ export class TelemetryStore {
     return out;
   }
 
-  findTraceInstances(traceId: string): string[] {
+  findTraceInstances(traceId: string, realm?: string): string[] {
     const out: string[] = [];
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       if (inst.traces.has(traceId)) out.push(inst.id);
     }
     return out;
   }
 
-  getTraceParts(traceId: string): TracePart[] {
+  getTraceParts(traceId: string, realm?: string): TracePart[] {
     const out: TracePart[] = [];
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       const trace = inst.traces.get(traceId);
       if (trace) out.push({ instanceId: inst.id, serviceName: inst.serviceName, trace });
     }
@@ -521,9 +667,13 @@ export class TelemetryStore {
   }
 
   /** Logs correlated with a trace (optionally one span) across all instances, oldest first. */
-  getLogsForTrace(traceId: string, opts: { spanId?: string; limit?: number } = {}): TraceLogs {
+  getLogsForTrace(
+    traceId: string,
+    opts: { spanId?: string; limit?: number; realm?: string } = {}
+  ): TraceLogs {
     const items: TraceLog[] = [];
     for (const inst of this.instances.values()) {
+      if (opts.realm !== undefined && inst.realm !== opts.realm) continue;
       for (const log of inst.logs.view()) {
         if (log.traceId !== traceId) continue;
         if (opts.spanId !== undefined && log.spanId !== opts.spanId) continue;
@@ -536,9 +686,10 @@ export class TelemetryStore {
     return { items: items.slice(items.length - Math.max(0, limit)), truncated: true };
   }
 
-  countLogsByInstance(traceId: string, spanId?: string): Map<string, number> {
+  countLogsByInstance(traceId: string, spanId?: string, realm?: string): Map<string, number> {
     const out = new Map<string, number>();
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       let n = 0;
       for (const log of inst.logs.view()) {
         if (log.traceId === traceId && (spanId === undefined || log.spanId === spanId)) n++;
@@ -548,9 +699,10 @@ export class TelemetryStore {
     return out;
   }
 
-  countLogsByTrace(): Map<string, number> {
+  countLogsByTrace(realm?: string): Map<string, number> {
     const out = new Map<string, number>();
     for (const inst of this.instances.values()) {
+      if (realm !== undefined && inst.realm !== realm) continue;
       for (const log of inst.logs.view()) {
         if (log.traceId) out.set(log.traceId, (out.get(log.traceId) ?? 0) + 1);
       }

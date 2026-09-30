@@ -144,6 +144,14 @@ You can also route data through an [OpenTelemetry Collector](https://opentelemet
 
 Going the other way works too: select a log and click **View Trace** (or click its Trace ID) to open the waterfall with the log's span selected. **OpenTelemetry: Find Trace by ID** accepts a trace ID or a W3C `traceparent` pasted from your terminal.
 
+**Share a reproduced bug (traces, logs and metrics)**
+
+1. Reproduce the problem with the receiver running.
+2. Click **Save Session…** in the Instances view toolbar. To save less, use **Save Instance…** on an instance, or right-click a trace in the Traces panel and choose **Export Trace…** to get that trace and its correlated logs.
+3. Your teammate runs **OpenTelemetry: Load Session…**. The file opens under **Imported**, and the waterfall, logs, metrics charts and service map all work. A loaded file is kept separate from live data and from other files, so the same trace never shows twice.
+
+**Open CI or Collector output**: **Load Session…** also accepts a bare OTLP/JSON request, or the JSON Lines written by the OpenTelemetry Collector `file` exporter.
+
 **Share a log sample with a teammate**
 
 1. Open **Logs** and narrow the table with the search, level, attribute, and time-range controls.
@@ -340,10 +348,13 @@ The Traces query bar combines with the toolbar filters; every term must match. T
 | `OpenTelemetry: Open Logs / Traces / Metrics` | Open a panel for the selected instance. |
 | `OpenTelemetry: Export Logs` | Export logs as OTLP/JSON, plain JSON, or CSV. |
 | `OpenTelemetry: Import Logs From File` | Load an OTLP/JSON, JSON Lines (`.jsonl`/`.ndjson`) or exported plain JSON file as a read-only instance. |
+| `OpenTelemetry: Save Session…` | Save all traces, logs and metrics to one `.otel.json` file. Each section is an OTLP `Export*ServiceRequest`. |
+| `OpenTelemetry: Load Session…` | Load a saved session, an OTLP/JSON request, or Collector file-exporter JSON Lines under **Imported**. |
+| `OpenTelemetry: Save Instance…` | Save one instance's traces, logs and metrics. |
 | `OpenTelemetry: Open Service Map` | Show the service dependency graph. |
 | `OpenTelemetry: Find Trace by ID` | Open a trace's waterfall from a trace ID or W3C `traceparent`. |
 
-Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action.
+Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a **Remove Instance** action. Right-click a trace in the Traces panel for **Export Trace…**.
 
 ## Settings
 
@@ -359,8 +370,8 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
-| `otel.import.maxFileSize` | `200` | Largest log file (MB) accepted by **Import Logs**. Checked before the file is read. |
-| `otel.import.maxRecords` | `50000` | Most records accepted from one import. Imported logs bypass retention, so this bounds their memory use. |
+| `otel.import.maxFileSize` | `200` | Largest file (MB) accepted by **Import Logs** or **Load Session**. Checked before the file is read. |
+| `otel.import.maxRecords` | `50000` | Most records (spans, logs and metric points) accepted from one import or session. Imported data bypasses retention, so this bounds its memory use. |
 | `otel.ai.enabled` | `false` | Let Copilot and `@otel` read collected telemetry through the `otel_*` tools. User setting only. |
 | `otel.ai.redactAttributeKeys` | `[]` | Extra attribute keys to mask before data is sent to a model (added to the built-in list). |
 | `otel.ai.maxResultItems` | `25` | Most items (traces, spans, logs, series, …) one AI tool call may return (1–200). |
@@ -406,7 +417,7 @@ Paths are resolved inside your workspace folders; when only a file name matches,
 
 ### My collected data disappeared
 
-Live telemetry is stored **in memory** and is cleared when the receiver restarts or when you run **Clear Collected Data**. To keep a copy, use **Export…** in the Logs panel and re-open it later with **Import Logs From File** — imported instances survive **Clear Collected Data** and are only removed explicitly.
+Live telemetry is stored **in memory** and is cleared when the receiver restarts or when you run **Clear Collected Data**. To keep a copy, click **Save Session…** and load the file again later with **Load Session…**. Loaded data survives **Clear Collected Data** and is removed only when you remove it.
 
 ### The settings gear opens an empty page
 
@@ -420,7 +431,7 @@ See [SUPPORT.md](./SUPPORT.md) for what to include in a bug report. Remove secre
 
 Planned and under exploration — feedback welcome via [issues](https://github.com/sukanta1991/opentelemetry/issues):
 
-- Trace and metric export (logs can already be exported and imported)
+- Restore the last session automatically when VS Code reopens
 - Deeper service-map analytics (latency, error rates, throughput)
 
 ## Contributing

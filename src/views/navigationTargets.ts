@@ -2,7 +2,7 @@
 
 import { normalizeSpanId, normalizeTraceId } from '../store/ids';
 import { CodeLocation } from '../store/model';
-import { TelemetryStore } from '../store/store';
+import { LIVE_REALM, TelemetryStore } from '../store/store';
 
 export interface TraceTarget {
   traceId: string;
@@ -44,13 +44,16 @@ export function parseSourceTarget(raw: unknown): CodeLocation | undefined {
   return { filepath: r.filepath, line: pos(r.line), column: pos(r.column), function: fn };
 }
 
-// Prefers the caller's instance, then the one holding the earliest root span, then the first.
+// Stays in the caller's realm (live if none) when it has the trace, then the caller's instance,
+// then the one holding the earliest root span, then the first.
 export function pickTraceInstance(
   store: TelemetryStore,
   traceId: string,
   preferInstanceId?: string
 ): string | undefined {
-  const ids = store.findTraceInstances(traceId);
+  const realm = (preferInstanceId && store.getInstance(preferInstanceId)?.realm) || LIVE_REALM;
+  let ids = store.findTraceInstances(traceId, realm);
+  if (!ids.length) ids = store.findTraceInstances(traceId);
   if (!ids.length) return undefined;
   if (preferInstanceId && ids.includes(preferInstanceId)) return preferInstanceId;
   let best: string | undefined;
