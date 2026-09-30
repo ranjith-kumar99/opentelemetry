@@ -1,29 +1,34 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { LIVE_REALM } from '../store/store';
 import { buildGraph } from './serviceGraph';
 import { getNonce, htmlShell } from './webviewUtil';
 
+// One panel per realm: live data, or one loaded session file.
 export class ServiceMapPanel {
-  private static current: ServiceMapPanel | undefined;
+  private static panels = new Map<string, ServiceMapPanel>();
   private disposables: vscode.Disposable[] = [];
 
-  static show(controller: OtelController): void {
-    if (ServiceMapPanel.current) {
-      ServiceMapPanel.current.panel.reveal(vscode.ViewColumn.Active);
+  static show(controller: OtelController, realm = LIVE_REALM): void {
+    const existing = ServiceMapPanel.panels.get(realm);
+    if (existing) {
+      existing.panel.reveal(vscode.ViewColumn.Active);
       return;
     }
+    const source = realm === LIVE_REALM ? undefined : controller.store.getSession(realm)?.source;
     const panel = vscode.window.createWebviewPanel(
       'otel.serviceMap',
-      'OpenTelemetry Service Map',
+      source ? `Service Map: ${source}` : 'OpenTelemetry Service Map',
       vscode.ViewColumn.Active,
       { enableScripts: true, retainContextWhenHidden: true }
     );
-    ServiceMapPanel.current = new ServiceMapPanel(panel, controller);
+    ServiceMapPanel.panels.set(realm, new ServiceMapPanel(panel, controller, realm));
   }
 
   private constructor(
     private readonly panel: vscode.WebviewPanel,
-    private readonly controller: OtelController
+    private readonly controller: OtelController,
+    private readonly realm: string
   ) {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, SCRIPT, STYLE);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
@@ -35,12 +40,12 @@ export class ServiceMapPanel {
   }
 
   private postGraph(): void {
-    const { nodes, edges } = buildGraph(this.controller.store.getAllTaggedSpans());
+    const { nodes, edges } = buildGraph(this.controller.store.getAllTaggedSpans(this.realm));
     this.panel.webview.postMessage({ type: 'graph', nodes, edges });
   }
 
   private dispose(): void {
-    ServiceMapPanel.current = undefined;
+    ServiceMapPanel.panels.delete(this.realm);
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
   }

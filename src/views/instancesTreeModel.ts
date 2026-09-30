@@ -1,19 +1,33 @@
 import { Application, Instance } from '../store/store';
 
 export function instanceLabel(inst: Instance): string {
-  return inst.serviceInstanceId ?? inst.id.split('::')[1] ?? inst.id;
+  // The hash is the last id segment for live (svc::hash) and loaded (imported::file::n::svc::hash) ids.
+  return inst.serviceInstanceId ?? inst.id.split('::').pop() ?? inst.id;
 }
 
-export function instanceDescription(inst: Instance): string {
-  if (inst.kind === 'imported') return `${inst.source ?? 'file'} · ${inst.logCount} logs`;
-  return `${inst.logCount} logs · ${inst.traces.size} traces · ${inst.metrics.size} metrics`;
+export function instanceDescription(inst: Instance, withSource = true): string {
+  const counts = `${inst.logCount} logs · ${inst.traces.size} traces · ${inst.metrics.size} metrics`;
+  return inst.kind === 'imported' && withSource ? `${inst.source ?? 'file'} · ${counts}` : counts;
+}
+
+export function serviceDescription(instances: readonly Instance[]): string {
+  let logs = 0;
+  let traces = 0;
+  let metrics = 0;
+  for (const i of instances) {
+    logs += i.logCount;
+    traces += i.traces.size;
+    metrics += i.metrics.size;
+  }
+  const n = instances.length;
+  return `${n} instance${n === 1 ? '' : 's'} · ${logs} logs · ${traces} traces · ${metrics} metrics`;
 }
 
 // Changes only when apps/instances are added, removed or reordered — not when counts change.
 export function treeShape(apps: Application[], imported: Instance[]): string {
   return JSON.stringify([
     apps.map((a) => [a.name, a.instances.map((i) => i.id)]),
-    imported.map((i) => i.id),
+    imported.map((i) => [i.realm, i.id]),
   ]);
 }
 
