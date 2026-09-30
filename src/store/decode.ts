@@ -115,7 +115,13 @@ function keyValues(list: any[]): KeyValueMap {
   if (!Array.isArray(list)) return out;
   for (const kv of list) {
     if (!kv || typeof kv.key !== 'string') continue;
-    out[kv.key] = anyValue(kv.value);
+    const value = anyValue(kv.value);
+    // Plain assignment of "__proto__" would replace the prototype instead of adding a key.
+    if (kv.key === '__proto__') {
+      Object.defineProperty(out, kv.key, { value, enumerable: true, writable: true, configurable: true });
+    } else {
+      out[kv.key] = value;
+    }
   }
   return out;
 }
