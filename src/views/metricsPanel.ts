@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { setUseLocalTime, useLocalTime } from '../settings';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
 import { getNonce, getUri, htmlShell } from './webviewUtil';
@@ -37,11 +38,20 @@ export class MetricsPanel {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
-      if (m?.type === 'ready') this.postData();
-      else if (m?.type === 'openSetting' && typeof m.key === 'string') {
+      if (m?.type === 'ready') {
+        this.postTimeZone();
+        this.postData();
+      } else if (m?.type === 'setTimeZone' && typeof m.useLocalTime === 'boolean') {
+        void setUseLocalTime(m.useLocalTime);
+      } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
     }, null, this.disposables);
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
+      })
+    );
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }
@@ -71,6 +81,10 @@ export class MetricsPanel {
         buckets: m.type === 'histogram' ? histogramBuckets(m) ?? undefined : undefined,
       }));
     this.panel.webview.postMessage({ type: 'data', metrics });
+  }
+
+  private postTimeZone(): void {
+    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
   }
 
   private dispose(): void {
@@ -282,6 +296,7 @@ const BODY = `
   <span id="stepPicker" class="range-picker" style="display:none" title="Bucket width used by the Over time aggregation">
     <select id="step" aria-label="Aggregation step"></select>
   </span>
+  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
 </div>
 <div id="tableWrap" class="rows"><table><thead>
   <tr><th style="width:32%">Metric</th><th style="width:110px">Type</th><th style="width:70px">Unit</th><th>Data points (latest)</th></tr>

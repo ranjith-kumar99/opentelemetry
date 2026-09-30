@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { setUseLocalTime, useLocalTime } from '../settings';
 import { StoredLogRecord } from '../store/model';
 import { openCodeLocation } from './codeNav';
 import {
@@ -90,6 +91,11 @@ export class LogsPanel {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
+      })
+    );
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }
@@ -125,8 +131,17 @@ export class LogsPanel {
   }
 
   private async onMessage(m: unknown): Promise<void> {
-    const msg = m as { type?: string; seq?: number; lastSeq?: number; key?: string; scope?: string };
-    if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
+    const msg = m as {
+      type?: string;
+      seq?: number;
+      lastSeq?: number;
+      key?: string;
+      scope?: string;
+      useLocalTime?: unknown;
+    };
+    if (msg?.type === 'setTimeZone' && typeof msg.useLocalTime === 'boolean') {
+      await setUseLocalTime(msg.useLocalTime);
+    } else if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
       await this.navigateToCode(msg.seq);
     } else if (msg?.type === 'viewTrace' && Number.isInteger(msg.seq)) {
       await this.viewTrace(msg.seq as number, msg.scope === 'span');
@@ -138,6 +153,7 @@ export class LogsPanel {
       await this.exportLogs(m as ExportRequest);
     } else if (msg?.type === 'ready') {
       this.ready = true;
+      this.postTimeZone();
       this.lastPostedSeq = typeof msg.lastSeq === 'number' && msg.lastSeq > 0 ? msg.lastSeq : 0;
       this.lastOldestSeq = -1;
       const inst = this.controller.store.getInstance(this.instanceId);
@@ -157,6 +173,10 @@ export class LogsPanel {
         this.postCorrelate(c);
       }
     }
+  }
+
+  private postTimeZone(): void {
+    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
   }
 
   private correlate(c: LogsCorrelation): void {
@@ -385,6 +405,7 @@ const BODY = `
   <button id="nav" class="secondary">Navigate To Code</button>
   <button id="viewTrace" class="secondary" title="Open the focused log's trace waterfall" disabled>View Trace</button>
   <button id="open" class="secondary">Open In Editor</button>
+  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
   <span id="count" class="count muted"></span>
 </div>
 <div id="retentionHint" class="hint" hidden>

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { setUseLocalTime, useLocalTime } from '../settings';
 import { KeyValueMap } from '../store/model';
 import { TaggedSpan, TracePart } from '../store/store';
 import { openCodeLocation } from './codeNav';
@@ -86,6 +87,11 @@ export class TracesPanel {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
+    this.disposables.push(
+      vscode.workspace.onDidChangeConfiguration((e) => {
+        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
+      })
+    );
     this.panel.onDidChangeViewState(
       () => {
         if (this.panel.visible && this.dirty) this.scheduleList();
@@ -187,12 +193,16 @@ export class TracesPanel {
       case 'ready':
         this.applyQuery(msg);
         this.ready = true;
+        this.postTimeZone();
         this.postList();
         if (this.pendingFocus) {
           const f = this.pendingFocus;
           this.pendingFocus = undefined;
           this.postWaterfall(f.traceId, f.spanId);
         }
+        break;
+      case 'setTimeZone':
+        if (typeof msg.useLocalTime === 'boolean') void setUseLocalTime(msg.useLocalTime);
         break;
       case 'viewLogs':
         void this.viewLogs(msg.traceId, msg.spanId);
@@ -215,6 +225,10 @@ export class TracesPanel {
         }
         break;
     }
+  }
+
+  private postTimeZone(): void {
+    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
   }
 
   private async viewLogs(traceId: unknown, spanId: unknown): Promise<void> {
@@ -416,6 +430,7 @@ const BODY = `
     <select id="range" aria-label="Time range"></select>
   </span>
   <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
+  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
   <span id="count" class="count muted"></span>
 </div>
 <div class="toolbar query-bar">

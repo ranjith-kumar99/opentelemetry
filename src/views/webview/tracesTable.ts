@@ -80,6 +80,8 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
+const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
+let localTime = true;
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(
@@ -228,7 +230,7 @@ function layoutColumns(): void {
 // --- Rows --------------------------------------------------------------------------------
 
 function cellHtml(r: TraceRow, id: TraceColumnId): string {
-  const text = esc(traceCellText(r, id));
+  const text = esc(traceCellText(r, id, localTime));
   switch (id) {
     case 'status':
       return r.errorCount
@@ -307,6 +309,10 @@ rowsEl.addEventListener('scroll', () => {
     const last = Math.ceil((rowsEl.scrollTop + rowsEl.clientHeight) / rowH);
     if (first < winStart + 2 || last > winEnd - 2) paint();
   });
+});
+
+localTimeCheckbox.addEventListener('change', () => {
+  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 
 function ensureVisible(index: number): void {
@@ -634,8 +640,19 @@ interface ListMessage {
   gone?: boolean;
 }
 
+interface TimeZoneMessage {
+  type: 'timeZone';
+  useLocalTime: boolean;
+}
+
 window.addEventListener('message', (e: MessageEvent) => {
-  const m = e.data as ListMessage | WaterfallMessage;
+  const m = e.data as ListMessage | TimeZoneMessage | WaterfallMessage;
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    localTime = m.useLocalTime;
+    localTimeCheckbox.checked = localTime;
+    paint();
+    return;
+  }
   if (m?.type === 'list' && Array.isArray(m.traces)) {
     traces = m.traces;
     total = m.total ?? m.traces.length;

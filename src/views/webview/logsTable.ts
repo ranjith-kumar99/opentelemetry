@@ -46,6 +46,7 @@ import {
   severityClass,
   sortLogs,
 } from './logView';
+import { formatTimestamp } from '../format';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
@@ -60,6 +61,7 @@ const OVERSCAN = 8;
 const DEFAULT_ROW_HEIGHT = 24;
 
 const state: LogsPanelState = loadLogsPanelState(vscode.getState());
+let localTime = true;
 
 // All retained records, ascending by seq (the order the host sends them in).
 let logs: WireLog[] = [];
@@ -129,6 +131,7 @@ const corrChip = byId<HTMLSpanElement>('corrChip');
 const corrLabel = byId<HTMLSpanElement>('corrLabel');
 const corrClear = byId<HTMLButtonElement>('corrClear');
 const viewTraceBtn = byId<HTMLButtonElement>('viewTrace');
+const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -213,7 +216,7 @@ function cellHtml(l: WireLog, id: LogColumnId): string {
     const on = selection.has(l.seq) ? ' checked' : '';
     return `<td class="selcol"><input type="checkbox" data-sel="${l.seq}" aria-label="Select row"${on} /></td>`;
   }
-  const text = esc(cellText(l, id));
+  const text = esc(cellText(l, id, localTime));
   if (parseAttrColumn(id) !== undefined) return `<td class="attrs"><div class="clamp">${text}</div></td>`;
   switch (id) {
     case 'time':
@@ -413,7 +416,7 @@ function updateRetentionHint(): void {
   const short = !correlate && needsMoreRetention(logs, state.range, evicted);
   retentionHint.hidden = !short;
   if (!short) return;
-  const oldest = new Date(oldestTime(logs)).toLocaleTimeString();
+  const oldest = formatTimestamp(oldestTime(logs), localTime);
   hintText.textContent =
     `${LOG_RANGE_LABEL[state.range]} was requested, but retention only holds ` +
     `${logs.length} logs (back to ${oldest}).`;
@@ -430,6 +433,10 @@ rowsEl.addEventListener('scroll', () => {
     // Repaint only once the viewport approaches the edge of the rendered window.
     if (indexAt(top) < winStart + 2 || indexAt(top + viewH) > winEnd - 2) paint();
   });
+});
+
+localTimeCheckbox.addEventListener('change', () => {
+  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 
 // --- Column resizing -----------------------------------------------------------------
@@ -1125,7 +1132,15 @@ window.addEventListener('message', (e: MessageEvent) => {
     traceId?: unknown;
     spanId?: unknown;
     focusSeq?: unknown;
+    useLocalTime?: unknown;
   };
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    localTime = m.useLocalTime;
+    localTimeCheckbox.checked = localTime;
+    paint();
+    updateRetentionHint();
+    return;
+  }
   if (m?.type === 'correlate') {
     if (typeof m.traceId !== 'string' || !TRACE_ID.test(m.traceId)) return;
     const spanId = typeof m.spanId === 'string' && SPAN_ID.test(m.spanId) ? m.spanId : undefined;

@@ -17,6 +17,36 @@ export function formatDuration(ms: number): string {
   return `${(ms / 60000).toFixed(2)}min`;
 }
 
+export function formatTimestamp(ms: number, useLocalTime: boolean): string {
+  const date = new Date(ms);
+  const get = (local: () => number, utc: () => number): number => (useLocalTime ? local() : utc());
+  const pad = (n: number, width = 2): string => String(n).padStart(width, '0');
+  const offset = useLocalTime ? -date.getTimezoneOffset() : 0;
+  const zone = useLocalTime
+    ? `${offset < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`
+    : 'Z';
+
+  return (
+    `${pad(get(() => date.getFullYear(), () => date.getUTCFullYear()), 4)}-` +
+    `${pad(get(() => date.getMonth() + 1, () => date.getUTCMonth() + 1))}-` +
+    `${pad(get(() => date.getDate(), () => date.getUTCDate()))}T` +
+    `${pad(get(() => date.getHours(), () => date.getUTCHours()))}:` +
+    `${pad(get(() => date.getMinutes(), () => date.getUTCMinutes()))}:` +
+    `${pad(get(() => date.getSeconds(), () => date.getUTCSeconds()))}.` +
+    `${pad(date.getMilliseconds(), 3)}${zone}`
+  );
+}
+
+export function formatChartTime(ms: number, useLocalTime: boolean, includeDate: boolean): string {
+  const options: Intl.DateTimeFormatOptions = {
+    hour: '2-digit',
+    minute: '2-digit',
+    ...(includeDate ? { month: 'short', day: 'numeric' } : {}),
+    ...(!useLocalTime ? { timeZone: 'UTC' } : {}),
+  };
+  return new Intl.DateTimeFormat(undefined, options).format(new Date(ms));
+}
+
 export function shortId(id: string, len = 8): string {
   return id.length > len ? id.slice(0, len) : id;
 }

@@ -1,6 +1,7 @@
 // Bundled webview app for the Metrics panel. Built by esbuild into dist/webview/metricsChart.js
 // and loaded by MetricsPanel. Owns the toolbar, table view, and uPlot graph view.
 import uPlot from 'uplot';
+import { formatChartTime } from '../format';
 import {
   AGG_LABEL,
   AggKind,
@@ -95,6 +96,7 @@ type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
+let useLocalTime = true;
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
@@ -142,6 +144,7 @@ const stepSel = el<HTMLSelectElement>('step');
 const retentionHint = el<HTMLElement>('retentionHint');
 const retentionHintText = el<HTMLElement>('retentionHintText');
 const retentionSetting = el<HTMLButtonElement>('retentionSetting');
+const localTimeCheckbox = el<HTMLInputElement>('useLocalTime');
 
 function esc(s: unknown): string {
   return s == null
@@ -519,7 +522,13 @@ function drawLine(
     scales: { x: { time: true, range: () => xRange } },
     legend: { show: false },
     axes: [
-      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
+      {
+        stroke,
+        grid: { stroke: grid },
+        ticks: { stroke: grid },
+        values: (_u, splits) =>
+          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
+      },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [
@@ -551,7 +560,13 @@ function drawStackedArea(container: HTMLElement, g: LineGraph, xRange: XRange): 
     scales: { x: { time: true, range: () => xRange } },
     legend: { show: false },
     axes: [
-      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
+      {
+        stroke,
+        grid: { stroke: grid },
+        ticks: { stroke: grid },
+        values: (_u, splits) =>
+          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
+      },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [
@@ -589,7 +604,13 @@ function drawTimeBars(container: HTMLElement, g: LineGraph, xRange: XRange): uPl
     legend: { show: false },
     scales: { x: { time: true, range: () => xRange } },
     axes: [
-      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
+      {
+        stroke,
+        grid: { stroke: grid },
+        ticks: { stroke: grid },
+        values: (_u, splits) =>
+          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
+      },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [
@@ -1062,8 +1083,18 @@ window.addEventListener('resize', () => {
   resizeTimer = window.setTimeout(resizeCharts, 150);
 });
 
+localTimeCheckbox.addEventListener('change', () => {
+  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
+});
+
 window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data;
+  if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
+    useLocalTime = m.useLocalTime;
+    localTimeCheckbox.checked = useLocalTime;
+    apply();
+    return;
+  }
   if (m && m.type === 'data') {
     metrics = m.metrics || [];
     apply();
