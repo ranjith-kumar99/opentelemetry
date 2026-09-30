@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Local timezone display for log and trace timestamps and metric chart axes, with a panel toggle to switch between local time and UTC. The default is local time.
+
 ### Changed
 
 - README reorganised: why and when to use the extension, features at a glance, a privacy and data-handling section, and a comparison with Jaeger and Grafana. The detailed feature list moved further down.

@@ -89,7 +89,7 @@ export class TracesPanel {
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
+        if (e.affectsConfiguration('otel.uselocaltime')) this.postTimeZone();
       })
     );
     this.panel.onDidChangeViewState(

@@ -309,7 +309,7 @@
     "configuration": {
       "title": "OpenTelemetry",
       "properties": {
-        "otel.useLocalTime": {
+        "otel.uselocaltime": {
           "type": "boolean",
           "default": true,
           "scope": "application",
