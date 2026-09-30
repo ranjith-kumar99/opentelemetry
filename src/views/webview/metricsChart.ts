@@ -1084,6 +1084,8 @@ window.addEventListener('resize', () => {
 });
 
 localTimeCheckbox.addEventListener('change', () => {
+  useLocalTime = localTimeCheckbox.checked;
+  apply();
   vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 

@@ -202,7 +202,7 @@ export class TracesPanel {
         }
         break;
       case 'setTimeZone':
-        if (typeof msg.useLocalTime === 'boolean') void setUseLocalTime(msg.useLocalTime);
+        if (typeof msg.useLocalTime === 'boolean') void this.persistTimeZone(msg.useLocalTime);
         break;
       case 'viewLogs':
         void this.viewLogs(msg.traceId, msg.spanId);
@@ -229,6 +229,17 @@ export class TracesPanel {
 
   private postTimeZone(): void {
     void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
+  }
+
+  private async persistTimeZone(value: boolean): Promise<void> {
+    try {
+      await setUseLocalTime(value);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    this.postTimeZone();
   }
 
   private async viewLogs(traceId: unknown, spanId: unknown): Promise<void> {

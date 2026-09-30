@@ -436,6 +436,9 @@ rowsEl.addEventListener('scroll', () => {
 });
 
 localTimeCheckbox.addEventListener('change', () => {
+  localTime = localTimeCheckbox.checked;
+  paint();
+  updateRetentionHint();
   vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 

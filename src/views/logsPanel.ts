@@ -140,7 +140,7 @@ export class LogsPanel {
       useLocalTime?: unknown;
     };
     if (msg?.type === 'setTimeZone' && typeof msg.useLocalTime === 'boolean') {
-      await setUseLocalTime(msg.useLocalTime);
+      await this.persistTimeZone(msg.useLocalTime);
     } else if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
       await this.navigateToCode(msg.seq);
     } else if (msg?.type === 'viewTrace' && Number.isInteger(msg.seq)) {
@@ -173,6 +173,17 @@ export class LogsPanel {
         this.postCorrelate(c);
       }
     }
+  }
+
+  private async persistTimeZone(value: boolean): Promise<void> {
+    try {
+      await setUseLocalTime(value);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    this.postTimeZone();
   }
 
   private postTimeZone(): void {

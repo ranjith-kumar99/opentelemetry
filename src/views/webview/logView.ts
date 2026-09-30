@@ -188,7 +188,7 @@ export function formatCodeLocation(l: WireLog): string {
 }
 
 // The display string for one cell. Also used as the CSV value for that column.
-export function cellText(l: WireLog, col: LogColumnId, useLocalTime = false): string {
+export function cellText(l: WireLog, col: LogColumnId, useLocalTime = true): string {
   const key = parseAttrColumn(col);
   if (key !== undefined) return stringifyValue(l.attrs[key]);
   switch (col) {

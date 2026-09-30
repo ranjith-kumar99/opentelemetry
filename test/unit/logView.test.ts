@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { formatTimestamp } from '../../src/views/format';
 import {
   DEFAULT_DENSITY,
   DEFAULT_LOG_RANGE,
@@ -152,8 +153,10 @@ describe('logView cell text', () => {
   });
 
   it('renders each column', () => {
-    assert.strictEqual(cellText(log, 'time'), new Date(1000).toISOString());
-    assert.strictEqual(cellText(log, 'observedTime'), new Date(1000).toISOString());
+    assert.strictEqual(cellText(log, 'time', false), new Date(1000).toISOString());
+    assert.strictEqual(cellText(log, 'observedTime', false), new Date(1000).toISOString());
+    assert.strictEqual(cellText(log, 'time'), formatTimestamp(1000, true));
+    assert.strictEqual(cellText(log, 'observedTime'), formatTimestamp(1000, true));
     assert.strictEqual(cellText(log, 'level'), 'ERROR', 'falls back to severityLabel');
     assert.strictEqual(cellText(log, 'severityNumber'), '17');
     assert.strictEqual(cellText(log, 'message'), '{"a":1}');

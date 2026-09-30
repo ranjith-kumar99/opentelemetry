@@ -1,4 +1,5 @@
 import * as assert from 'assert';
+import { formatTimestamp } from '../../src/views/format';
 import {
   TRACE_COLUMNS,
   isTraceColumnId,
@@ -84,7 +85,8 @@ describe('traceView cell text', () => {
     const r = row('t', { startMs: 0, durationMs: 1500, errorCount: 1, services: ['a', 'b'], rootAttrs: { k: 'v' } });
     assert.strictEqual(traceCellText(r, 'status'), 'Error');
     assert.strictEqual(traceCellText(row('t'), 'status'), '');
-    assert.strictEqual(traceCellText(r, 'start'), '1970-01-01T00:00:00.000Z');
+    assert.strictEqual(traceCellText(r, 'start', false), '1970-01-01T00:00:00.000Z');
+    assert.strictEqual(traceCellText(r, 'start'), formatTimestamp(r.startMs, true));
     assert.strictEqual(traceCellText(r, 'duration'), '1.50s');
     assert.strictEqual(traceCellText(r, 'services'), 'a, b');
     assert.strictEqual(traceCellText(r, 'attr:k'), 'v');

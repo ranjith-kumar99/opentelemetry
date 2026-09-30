@@ -18,33 +18,28 @@ export function formatDuration(ms: number): string {
 }
 
 export function formatTimestamp(ms: number, useLocalTime: boolean): string {
-  const date = new Date(ms);
-  const get = (local: () => number, utc: () => number): number => (useLocalTime ? local() : utc());
-  const pad = (n: number, width = 2): string => String(n).padStart(width, '0');
-  const offset = useLocalTime ? -date.getTimezoneOffset() : 0;
-  const zone = useLocalTime
-    ? `${offset < 0 ? '-' : '+'}${pad(Math.floor(Math.abs(offset) / 60))}:${pad(Math.abs(offset) % 60)}`
-    : 'Z';
-
-  return (
-    `${pad(get(() => date.getFullYear(), () => date.getUTCFullYear()), 4)}-` +
-    `${pad(get(() => date.getMonth() + 1, () => date.getUTCMonth() + 1))}-` +
-    `${pad(get(() => date.getDate(), () => date.getUTCDate()))}T` +
-    `${pad(get(() => date.getHours(), () => date.getUTCHours()))}:` +
-    `${pad(get(() => date.getMinutes(), () => date.getUTCMinutes()))}:` +
-    `${pad(get(() => date.getSeconds(), () => date.getUTCSeconds()))}.` +
-    `${pad(date.getMilliseconds(), 3)}${zone}`
-  );
+  if (!useLocalTime) return new Date(ms).toISOString();
+  const offset = -new Date(ms).getTimezoneOffset();
+  const abs = Math.abs(offset);
+  const zone = `${offset < 0 ? '-' : '+'}${String(Math.floor(abs / 60)).padStart(2, '0')}:${String(abs % 60).padStart(2, '0')}`;
+  return new Date(ms + offset * 60000).toISOString().slice(0, -1) + zone;
 }
 
+const chartTimeFormats = new Map<number, Intl.DateTimeFormat>();
+
 export function formatChartTime(ms: number, useLocalTime: boolean, includeDate: boolean): string {
-  const options: Intl.DateTimeFormatOptions = {
-    hour: '2-digit',
-    minute: '2-digit',
-    ...(includeDate ? { month: 'short', day: 'numeric' } : {}),
-    ...(!useLocalTime ? { timeZone: 'UTC' } : {}),
-  };
-  return new Intl.DateTimeFormat(undefined, options).format(new Date(ms));
+  const key = (useLocalTime ? 1 : 0) | (includeDate ? 2 : 0);
+  let formatter = chartTimeFormats.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(undefined, {
+      hour: '2-digit',
+      minute: '2-digit',
+      ...(includeDate ? { month: 'short', day: 'numeric' } : {}),
+      ...(useLocalTime ? {} : { timeZone: 'UTC' }),
+    });
+    chartTimeFormats.set(key, formatter);
+  }
+  return formatter.format(ms);
 }
 
 export function shortId(id: string, len = 8): string {

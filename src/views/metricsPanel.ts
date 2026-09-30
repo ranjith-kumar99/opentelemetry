@@ -42,7 +42,7 @@ export class MetricsPanel {
         this.postTimeZone();
         this.postData();
       } else if (m?.type === 'setTimeZone' && typeof m.useLocalTime === 'boolean') {
-        void setUseLocalTime(m.useLocalTime);
+        void this.persistTimeZone(m.useLocalTime);
       } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
@@ -85,6 +85,17 @@ export class MetricsPanel {
 
   private postTimeZone(): void {
     void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
+  }
+
+  private async persistTimeZone(value: boolean): Promise<void> {
+    try {
+      await setUseLocalTime(value);
+    } catch (error) {
+      void vscode.window.showErrorMessage(
+        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
+      );
+    }
+    this.postTimeZone();
   }
 
   private dispose(): void {
