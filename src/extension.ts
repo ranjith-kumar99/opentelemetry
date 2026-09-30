@@ -5,14 +5,18 @@ import { OtelController } from './controller';
 import { OtelDebugConfigProvider } from './integration/debugConfigProvider';
 import { SNIPPETS } from './integration/snippets';
 import { readSettings } from './settings';
+import { normalizeTraceId } from './store/ids';
+import { LIVE_REALM } from './store/store';
 import { openCodeLocation } from './views/codeNav';
-import { InstanceNode, InstancesTreeProvider } from './views/instancesTree';
+import { ImportedSessionNode, InstanceNode, InstancesTreeProvider } from './views/instancesTree';
 import { LogImportError, parseLogFile } from './views/logImport';
 import { LogsPanel } from './views/logsPanel';
 import { MetricsPanel } from './views/metricsPanel';
 import { revealLogs, revealTrace } from './views/navigation';
 import { parseSourceTarget, parseTraceIdInput, parseTraceTarget } from './views/navigationTargets';
 import { ServiceMapPanel } from './views/serviceMapPanel';
+import { SessionScope, buildSession, defaultSessionFileName } from './views/sessionExport';
+import { parseSessionFile } from './views/sessionImport';
 import { TracesPanel } from './views/tracesPanel';
 
 let controller: OtelController;
@@ -63,7 +67,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
         `@ext:${context.extension.id}`
       )
     ),
-    vscode.commands.registerCommand('otel.openServiceMap', () => ServiceMapPanel.show(controller)),
+    vscode.commands.registerCommand('otel.openServiceMap', (arg: unknown) =>
+      ServiceMapPanel.show(controller, arg instanceof ImportedSessionNode ? arg.view.session.id : LIVE_REALM)
+    ),
     vscode.commands.registerCommand('otel.showSnippets', () => showSnippets()),
     vscode.commands.registerCommand('otel.openLogs', async (arg) => {
       const id = await resolveInstanceId(arg);
@@ -74,6 +80,25 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
       if (id) LogsPanel.exportFrom(controller, id);
     }),
     vscode.commands.registerCommand('otel.importLogs', () => importLogs()),
+    vscode.commands.registerCommand('otel.loadSession', () => loadSession()),
+    vscode.commands.registerCommand('otel.saveSession', (arg: unknown) => {
+      if (arg instanceof ImportedSessionNode) {
+        const { id, source } = arg.view.session;
+        return saveSession({ kind: 'session', sessionId: id }, source.replace(/\.[^.]*$/, ''));
+      }
+      return saveSession({ kind: 'all' }, 'otel-session');
+    }),
+    vscode.commands.registerCommand('otel.saveInstance', async (arg) => {
+      const id = await resolveInstanceId(arg);
+      const inst = id ? controller.store.getInstance(id) : undefined;
+      if (inst) await saveSession({ kind: 'instance', instanceId: inst.id }, inst.serviceName);
+    }),
+    vscode.commands.registerCommand('otel.exportTrace', async (arg: unknown) => {
+      const traceId = normalizeTraceId(stringProp(arg, 'traceId'));
+      if (!traceId) return;
+      const realm = TracesPanel.activeRealm() ?? LIVE_REALM;
+      await saveSession({ kind: 'trace', traceId, realm }, `trace-${traceId.slice(0, 8)}`);
+    }),
     vscode.commands.registerCommand('otel.openTraces', async (arg) => {
       const id = await resolveInstanceId(arg);
       if (id) TracesPanel.show(controller, id);
@@ -85,6 +110,9 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
     vscode.commands.registerCommand('otel.removeInstance', async (arg) => {
       const id = await resolveInstanceId(arg);
       if (id) controller.store.removeInstance(id);
+    }),
+    vscode.commands.registerCommand('otel.removeSession', (arg: unknown) => {
+      if (arg instanceof ImportedSessionNode) controller.store.removeSession(arg.view.session.id);
     }),
     vscode.commands.registerCommand('otel._revealTrace', (arg: unknown) => {
       const target = parseTraceTarget(arg);
@@ -98,6 +126,7 @@ export async function activate(context: vscode.ExtensionContext): Promise<void> 
           ...target,
           instanceId: stringProp(arg, 'instanceId'),
           focusSeq: Number.isInteger(seq) ? (seq as number) : undefined,
+          realm: stringProp(arg, 'realm'),
         });
       }
     }),
@@ -264,4 +293,101 @@ async function importLogs(): Promise<void> {
 
 export function deactivate(): void {
   controller?.dispose();
+}
+
+function plural(n: number, word: string): string {
+  return `${n} ${word}${n === 1 ? '' : 's'}`;
+}
+
+async function saveSession(scope: SessionScope, label: string): Promise<void> {
+  // Snapshot now so data arriving while the dialog is open doesn't change what is saved.
+  const built = buildSession(controller.store, scope);
+  const { spans, logs, metricPoints } = built.counts;
+  if (!spans && !logs && !metricPoints) {
+    vscode.window.showInformationMessage('OpenTelemetry: nothing to save yet.');
+    return;
+  }
+
+  const fileName = defaultSessionFileName(label);
+  const folder = vscode.workspace.workspaceFolders?.[0];
+  const uri = await vscode.window.showSaveDialog({
+    saveLabel: scope.kind === 'trace' ? 'Export Trace' : 'Save Session',
+    filters: { 'OpenTelemetry session': ['json'] },
+    defaultUri: folder ? vscode.Uri.joinPath(folder.uri, fileName) : vscode.Uri.file(fileName),
+  });
+  if (!uri) return;
+
+  try {
+    await vscode.workspace.fs.writeFile(uri, Buffer.from(built.text, 'utf8'));
+    vscode.window.showInformationMessage(
+      `Saved ${plural(spans, 'span')}, ${plural(logs, 'log')} and ${plural(metricPoints, 'metric point')} ` +
+        `to ${uri.path.split('/').pop()}.`
+    );
+  } catch (e) {
+    vscode.window.showErrorMessage(`Could not save the session. ${(e as Error).message}`);
+  }
+}
+
+async function loadSession(): Promise<void> {
+  const picked = await vscode.window.showOpenDialog({
+    canSelectMany: false,
+    openLabel: 'Load Session',
+    filters: { 'OpenTelemetry session or OTLP/JSON': ['json', 'jsonl', 'ndjson'] },
+  });
+  const uri = picked?.[0];
+  if (!uri) return;
+
+  const settings = readSettings();
+  const maxBytes = settings.importMaxFileSizeMb * 1024 * 1024;
+  const source = uri.path.split('/').pop() || 'session';
+
+  try {
+    // Size is checked before the file is read so an oversized file never reaches memory.
+    const stat = await vscode.workspace.fs.stat(uri);
+    if (stat.size > maxBytes) {
+      const mb = (stat.size / 1024 / 1024).toFixed(1);
+      vscode.window.showErrorMessage(
+        `File is ${mb} MB, above the ${settings.importMaxFileSizeMb} MB import limit. ` +
+          'Raise otel.import.maxFileSize to load it.'
+      );
+      return;
+    }
+
+    const { parsed, loaded } = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: 'Loading session…' },
+      async () => {
+        const bytes = await vscode.workspace.fs.readFile(uri);
+        const parsed = parseSessionFile(
+          new TextDecoder('utf-8', { fatal: false }).decode(bytes),
+          settings.importMaxRecords
+        );
+        const loaded = controller.store.importSession({
+          sourceLabel: source,
+          traces: parsed.traces,
+          logs: parsed.logs,
+          metrics: parsed.metrics,
+        });
+        return { parsed, loaded };
+      }
+    );
+
+    const instances = loaded.instanceIds.map((id) => controller.store.getInstance(id)!);
+    const traceIds = new Set(instances.flatMap((i) => [...i.traces.keys()]));
+    const spans = instances.reduce((n, i) => n + i.spanCount, 0);
+    const logs = instances.reduce((n, i) => n + i.logCount, 0);
+    const skippedNote = parsed.skipped
+      ? ` ${plural(parsed.skipped, 'unreadable line')} skipped (${parsed.skippedSample}).`
+      : '';
+    vscode.window.showInformationMessage(
+      `Loaded ${plural(spans, 'span')}, ${plural(logs, 'log')} and ` +
+        `${plural(parsed.counts.metricPoints, 'metric point')} from ${source}.${skippedNote}`
+    );
+    if (traceIds.size === 1) {
+      revealTrace(controller, { traceId: [...traceIds][0], preferInstanceId: loaded.instanceIds[0] });
+    } else {
+      await vscode.commands.executeCommand('otel.instances.focus');
+    }
+  } catch (e) {
+    vscode.window.showErrorMessage(`Could not load the session. ${(e as Error).message}`);
+  }
 }

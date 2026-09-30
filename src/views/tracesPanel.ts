@@ -43,6 +43,7 @@ function* taggedSpans(parts: readonly TracePart[]): Iterable<TaggedSpan> {
 
 export class TracesPanel {
   private static panels = new Map<string, TracesPanel>();
+  private static active: TracesPanel | undefined;
   private disposables: vscode.Disposable[] = [];
   private ready = false;
   private pendingFocus: TraceFocus | undefined;
@@ -77,6 +78,15 @@ export class TracesPanel {
     if (focus) target.focus(focus);
   }
 
+  // Realm of the focused traces panel, so webview context-menu commands stay in its data set.
+  static activeRealm(): string | undefined {
+    return TracesPanel.active?.realm;
+  }
+
+  private get realm(): string | undefined {
+    return this.controller.store.getInstance(this.instanceId)?.realm;
+  }
+
   private constructor(
     private readonly panel: vscode.WebviewPanel,
     private readonly controller: OtelController,
@@ -88,11 +98,13 @@ export class TracesPanel {
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.panel.onDidChangeViewState(
       () => {
+        if (this.panel.active) TracesPanel.active = this;
         if (this.panel.visible && this.dirty) this.scheduleList();
       },
       null,
       this.disposables
     );
+    TracesPanel.active = this;
     this.disposables.push(this.controller.store.onDidChange(() => this.scheduleList()));
   }
 
@@ -128,7 +140,7 @@ export class TracesPanel {
     const services = new Set<string>();
     let newest = 0;
     for (const traceId of inst.traces.keys()) {
-      const parts = store.getTraceParts(traceId);
+      const parts = store.getTraceParts(traceId, inst.realm);
       const summary = this.cache.get(traceId, parts);
       entries.push({ summary, parts });
       for (const s of summary.row.services) services.add(s);
@@ -137,7 +149,7 @@ export class TracesPanel {
     this.cache.prune(new Set(inst.traces.keys()));
 
     const [from] = windowBounds(newest, this.input.range);
-    const logCounts = this.withLogs ? store.countLogsByTrace() : undefined;
+    const logCounts = this.withLogs ? store.countLogsByTrace(inst.realm) : undefined;
     const traces: TraceRow[] = [];
     for (const { summary, parts } of entries) {
       const row = summary.row;
@@ -225,10 +237,15 @@ export class TracesPanel {
       const span = typeof spanId === 'string' ? cur.spans.get(spanId) : undefined;
       if (!span) return;
       // Prefer the span's own instance when it actually holds logs for the span.
-      const counts = this.controller.store.countLogsByInstance(cur.traceId, span.span.spanId);
+      const counts = this.controller.store.countLogsByInstance(cur.traceId, span.span.spanId, this.realm);
       if (counts.has(span.instanceId)) instanceId = span.instanceId;
     }
-    await vscode.commands.executeCommand('otel._revealLogs', { traceId: cur.traceId, spanId, instanceId });
+    await vscode.commands.executeCommand('otel._revealLogs', {
+      traceId: cur.traceId,
+      spanId,
+      instanceId,
+      realm: this.realm,
+    });
   }
 
   private async openLog(seq: unknown, instanceId: unknown): Promise<void> {
@@ -246,7 +263,7 @@ export class TracesPanel {
   private revealLink(traceId: unknown, spanId: unknown): void {
     if (typeof traceId !== 'string' || typeof spanId !== 'string') return;
     if (!this.current?.links.has(`${traceId}/${spanId}`)) return;
-    if (!this.controller.store.findTraceInstances(traceId).length) {
+    if (!this.controller.store.findTraceInstances(traceId, this.realm).length) {
       vscode.window.showInformationMessage('The linked trace is not in collected data.');
       return;
     }
@@ -259,9 +276,11 @@ export class TracesPanel {
   }
 
   private waterfallSignature(traceId: string): string {
+    const store = this.controller.store;
+    const realm = this.realm;
     let logs = 0;
-    for (const n of this.controller.store.countLogsByInstance(traceId).values()) logs += n;
-    return `${traceSignature(this.controller.store.getTraceParts(traceId))}#${logs}`;
+    for (const n of store.countLogsByInstance(traceId, undefined, realm).values()) logs += n;
+    return `${traceSignature(store.getTraceParts(traceId, realm))}#${logs}`;
   }
 
   private refreshWaterfall(): void {
@@ -271,14 +290,15 @@ export class TracesPanel {
 
   private postWaterfall(traceId: string, focusSpanId?: string, refresh = false): void {
     const store = this.controller.store;
-    const tagged = store.getSpansForTrace(traceId);
+    const realm = this.realm;
+    const tagged = store.getSpansForTrace(traceId, realm);
     const sig = this.waterfallSignature(traceId);
     if (!tagged.length) {
       this.current = { traceId, spans: new Map(), links: new Set(), sig };
       void this.panel.webview.postMessage({ type: 'waterfall', traceId, gone: true });
       return;
     }
-    const logs = store.getLogsForTrace(traceId, { limit: MAX_WATERFALL_LOGS });
+    const logs = store.getLogsForTrace(traceId, { limit: MAX_WATERFALL_LOGS, realm });
     const resources = new Map<string, { serviceName: string; attrs: KeyValueMap }>();
     const spans = new Map<string, TaggedSpan>();
     const links = new Set<string>();
@@ -291,7 +311,7 @@ export class TracesPanel {
     }
     const payload = buildWaterfallPayload(traceId, tagged, logs.items, resources, {
       truncated: logs.truncated,
-      linkAvailable: (id) => store.findTraceInstances(id).length > 0,
+      linkAvailable: (id) => store.findTraceInstances(id, realm).length > 0,
     });
     this.current = { traceId, spans, links, sig };
     void this.panel.webview.postMessage({ type: 'waterfall', ...payload, focusSpanId, refresh });
@@ -300,6 +320,7 @@ export class TracesPanel {
   private dispose(): void {
     clearTimeout(this.timer);
     TracesPanel.panels.delete(this.instanceId);
+    if (TracesPanel.active === this) TracesPanel.active = undefined;
     this.panel.dispose();
     for (const d of this.disposables) d.dispose();
   }

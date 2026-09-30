@@ -265,8 +265,10 @@ function paint(): void {
   for (let i = start; i < end; i++) {
     const r = view[i];
     const sel = r.traceId === selected;
+    const menu = { webviewSection: 'traceRow', traceId: r.traceId, preventDefaultContextMenuItems: true };
     html.push(
       `<tr class="selectable${sel ? ' selected' : ''}" data-id="${esc(r.traceId)}" ` +
+        `data-vscode-context="${esc(JSON.stringify(menu))}" ` +
         `aria-rowindex="${i + 2}" aria-selected="${sel}" tabindex="${sel ? 0 : -1}">`
     );
     for (const c of cols) html.push(cellHtml(r, c.id));

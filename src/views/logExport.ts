@@ -1,6 +1,7 @@
 // Pure log serializers for export. No vscode/DOM imports so they stay unit-testable.
 
-import { AttributeValue, KeyValueMap, StoredLogRecord } from '../store/model';
+import { byScope, encodeLog, encodeResource, toAnyValue, toKeyValues } from '../store/encode';
+import { KeyValueMap, StoredLogRecord } from '../store/model';
 import { LogColumnId, columnLabel } from './webview/logColumns';
 import { cellText, logTimeMs } from './webview/logView';
 import { serializeLog } from './logSerialize';
@@ -33,65 +34,18 @@ export function pickNewest(
 
 // --- OTLP/JSON ---------------------------------------------------------------------------
 
-// ms * 1e6 exceeds Number.MAX_SAFE_INTEGER for real timestamps, so nanos go through BigInt.
-function toNano(ms: number | undefined): string | undefined {
-  if (ms === undefined || !Number.isFinite(ms)) return undefined;
-  return (BigInt(Math.round(ms)) * BigInt(1_000_000)).toString();
-}
-
-export function toAnyValue(v: AttributeValue): Record<string, unknown> {
-  if (v === null || v === undefined) return {};
-  if (typeof v === 'string') return { stringValue: v };
-  if (typeof v === 'boolean') return { boolValue: v };
-  if (typeof v === 'number') {
-    // proto3 JSON encodes int64 as a string.
-    return Number.isInteger(v) ? { intValue: String(v) } : { doubleValue: v };
-  }
-  if (Array.isArray(v)) return { arrayValue: { values: v.map(toAnyValue) } };
-  return { kvlistValue: { values: toKeyValues(v as KeyValueMap) } };
-}
-
-export function toKeyValues(attrs: KeyValueMap): { key: string; value: unknown }[] {
-  return Object.keys(attrs).map((key) => ({ key, value: toAnyValue(attrs[key]) }));
-}
+export { toAnyValue, toKeyValues };
 
 export function exportOtlpJson(
   records: readonly StoredLogRecord[],
   inst: ExportInstance
 ): string {
-  const byScope = new Map<string, StoredLogRecord[]>();
-  for (const r of records) {
-    const key = r.scope ?? '';
-    const list = byScope.get(key);
-    if (list) list.push(r);
-    else byScope.set(key, [r]);
-  }
-
-  const resourceAttrs: KeyValueMap = { ...inst.resourceAttrs, 'service.name': inst.serviceName };
-  if (inst.serviceInstanceId) resourceAttrs['service.instance.id'] = inst.serviceInstanceId;
-
   return JSON.stringify(
     {
       resourceLogs: [
         {
-          resource: { attributes: toKeyValues(resourceAttrs) },
-          scopeLogs: [...byScope.entries()].map(([scope, logs]) => ({
-            scope: scope ? { name: scope } : {},
-            logRecords: logs.map((l) => {
-              const out: Record<string, unknown> = {
-                timeUnixNano: toNano(l.timeMs) ?? '0',
-                severityNumber: l.severityNumber,
-                severityText: l.severityText,
-                body: toAnyValue(l.body),
-                attributes: toKeyValues(l.attrs),
-              };
-              const observed = toNano(l.observedTimeMs);
-              if (observed) out.observedTimeUnixNano = observed;
-              if (l.traceId) out.traceId = l.traceId;
-              if (l.spanId) out.spanId = l.spanId;
-              return out;
-            }),
-          })),
+          resource: encodeResource(inst.serviceName, inst.serviceInstanceId, inst.resourceAttrs),
+          scopeLogs: byScope(records).map((g) => ({ scope: g.scope, logRecords: g.items.map(encodeLog) })),
         },
       ],
     },
