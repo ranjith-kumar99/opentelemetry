@@ -366,7 +366,7 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.port.http` | `4318` | OTLP/HTTP port (fixed mode). |
 | `otel.host` | `127.0.0.1` | Bind address. Binding beyond localhost exposes telemetry. |
 | `otel.overwriteEnvVars` | `true` | Inject the OTLP endpoint into launch/debug configs. |
-| `otel.uselocaltime` | `true` | Show Logs, Traces, and metric chart timestamps in your local timezone instead of UTC. |
+| `otel.useLocalTime` | `true` | Show Logs, Traces, and metric chart timestamps in your local timezone instead of UTC. |
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |

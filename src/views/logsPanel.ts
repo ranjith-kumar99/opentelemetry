@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setUseLocalTime, useLocalTime } from '../settings';
+import { setuseLocalTime, useLocalTime } from '../settings';
 import { StoredLogRecord } from '../store/model';
 import { openCodeLocation } from './codeNav';
 import {
@@ -93,7 +93,7 @@ export class LogsPanel {
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.uselocaltime')) this.postTimeZone();
+        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
       })
     );
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
@@ -177,7 +177,7 @@ export class LogsPanel {
 
   private async persistTimeZone(value: boolean): Promise<void> {
     try {
-      await setUseLocalTime(value);
+      await setuseLocalTime(value);
     } catch (error) {
       void vscode.window.showErrorMessage(
         `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
