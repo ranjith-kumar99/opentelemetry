@@ -798,7 +798,7 @@ function renderSig(
   reduce: ReduceKind,
   wline: LineGraph | undefined
 ): string {
-  const parts: string[] = [kind, agg, reduce];
+  const parts: string[] = [kind, agg, reduce, useLocalTime ? 'local' : 'utc'];
   const g = wline && wline.xs.length > 0 ? wline : undefined;
   parts.push(g ? '1' : '0');
   if (kind === 'histogram') parts.push((m.bars?.categories ?? []).join('\u0001'));
