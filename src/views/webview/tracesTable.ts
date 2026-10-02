@@ -80,7 +80,8 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
-let localTime = true;
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let localTime = document.body.dataset.useLocalTime !== 'false';
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(

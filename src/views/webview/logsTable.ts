@@ -61,7 +61,8 @@ const OVERSCAN = 8;
 const DEFAULT_ROW_HEIGHT = 24;
 
 const state: LogsPanelState = loadLogsPanelState(vscode.getState());
-let localTime = true;
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let localTime = document.body.dataset.useLocalTime !== 'false';
 
 // All retained records, ascending by seq (the order the host sends them in).
 let logs: WireLog[] = [];

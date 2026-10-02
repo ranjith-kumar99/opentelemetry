@@ -96,7 +96,8 @@ type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
-let useLocalTime = true;
+// The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
+let useLocalTime = document.body.dataset.useLocalTime !== 'false';
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
