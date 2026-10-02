@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Timestamps now default to your local time zone instead of UTC**, shown with the numeric UTC offset, in the Logs and Traces tables, metric chart axes, and CSV and grid JSON log exports. To keep UTC, uncheck **Use local time** in any of these panels or set `otel.useLocalTime` to `false`.
 - Each loaded file is isolated: waterfalls, trace-to-log links and the service map join only data from the same file, and live views no longer mix in imported data. AI tools still read everything.
 - `otel.import.maxFileSize` and `otel.import.maxRecords` also apply to loaded sessions. For sessions, `maxRecords` counts spans, logs and metric points together.
 - OTLP/JSON log export now keeps sub-millisecond timestamps.
