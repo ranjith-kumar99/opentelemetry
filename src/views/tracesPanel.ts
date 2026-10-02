@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setuseLocalTime, useLocalTime } from '../settings';
+import { useLocalTime } from '../settings';
 import { KeyValueMap } from '../store/model';
 import { TaggedSpan, TracePart } from '../store/store';
 import { openCodeLocation } from './codeNav';
@@ -213,9 +213,6 @@ export class TracesPanel {
           this.postWaterfall(f.traceId, f.spanId);
         }
         break;
-      case 'setTimeZone':
-        if (typeof msg.useLocalTime === 'boolean') void this.persistTimeZone(msg.useLocalTime);
-        break;
       case 'viewLogs':
         void this.viewLogs(msg.traceId, msg.spanId);
         break;
@@ -241,17 +238,6 @@ export class TracesPanel {
 
   private postTimeZone(): void {
     void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
-  }
-
-  private async persistTimeZone(value: boolean): Promise<void> {
-    try {
-      await setuseLocalTime(value);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    this.postTimeZone();
   }
 
   private async viewLogs(traceId: unknown, spanId: unknown): Promise<void> {
@@ -462,7 +448,6 @@ const BODY = `
     <select id="range" aria-label="Time range"></select>
   </span>
   <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
-  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
   <span id="count" class="count muted"></span>
 </div>
 <div class="toolbar query-bar">

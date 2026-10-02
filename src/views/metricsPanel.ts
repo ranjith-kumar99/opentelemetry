@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setuseLocalTime, useLocalTime } from '../settings';
+import { useLocalTime } from '../settings';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
 import { getNonce, getUri, htmlShell } from './webviewUtil';
@@ -41,8 +41,6 @@ export class MetricsPanel {
       if (m?.type === 'ready') {
         this.postTimeZone();
         this.postData();
-      } else if (m?.type === 'setTimeZone' && typeof m.useLocalTime === 'boolean') {
-        void this.persistTimeZone(m.useLocalTime);
       } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
@@ -85,17 +83,6 @@ export class MetricsPanel {
 
   private postTimeZone(): void {
     void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
-  }
-
-  private async persistTimeZone(value: boolean): Promise<void> {
-    try {
-      await setuseLocalTime(value);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    this.postTimeZone();
   }
 
   private dispose(): void {
@@ -307,7 +294,6 @@ const BODY = `
   <span id="stepPicker" class="range-picker" style="display:none" title="Bucket width used by the Over time aggregation">
     <select id="step" aria-label="Aggregation step"></select>
   </span>
-  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
 </div>
 <div id="tableWrap" class="rows"><table><thead>
   <tr><th style="width:32%">Metric</th><th style="width:110px">Type</th><th style="width:70px">Unit</th><th>Data points (latest)</th></tr>

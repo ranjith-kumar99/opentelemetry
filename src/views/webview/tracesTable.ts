@@ -80,7 +80,6 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
-const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
 let localTime = true;
 
 function esc(s: unknown): string {
@@ -311,12 +310,6 @@ rowsEl.addEventListener('scroll', () => {
     const last = Math.ceil((rowsEl.scrollTop + rowsEl.clientHeight) / rowH);
     if (first < winStart + 2 || last > winEnd - 2) paint();
   });
-});
-
-localTimeCheckbox.addEventListener('change', () => {
-  localTime = localTimeCheckbox.checked;
-  paint();
-  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 
 function ensureVisible(index: number): void {
@@ -653,7 +646,6 @@ window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data as ListMessage | TimeZoneMessage | WaterfallMessage;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     localTime = m.useLocalTime;
-    localTimeCheckbox.checked = localTime;
     paint();
     return;
   }

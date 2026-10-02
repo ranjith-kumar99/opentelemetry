@@ -62,7 +62,7 @@ observability backend. You can also send data to both at once (see [Apps running
 
 - Gauges, counters and sums, histograms, and summaries per instance.
 - A table or graph view, with chart type, over-time aggregation, and series roll-up per metric.
-- Choose local time or UTC for timestamps in Logs and Traces and on metric chart axes; local time is the default.
+- Choose local time or UTC for timestamps in Logs and Traces and on metric chart axes with the `otel.useLocalTime` setting; local time is the default.
 
 ### Service map
 

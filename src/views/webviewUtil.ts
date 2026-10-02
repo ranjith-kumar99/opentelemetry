@@ -77,11 +77,6 @@ const baseCss = `
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
     padding: 3px 6px; border-radius: 2px;
   }
-  input[type="checkbox"] { padding: 0; }
-  .timezone-toggle {
-    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-    color: var(--vscode-descriptionForeground); cursor: pointer;
-  }
   button {
     background: var(--vscode-button-background);
     color: var(--vscode-button-foreground);

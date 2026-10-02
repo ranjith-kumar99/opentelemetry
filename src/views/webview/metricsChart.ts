@@ -144,7 +144,6 @@ const stepSel = el<HTMLSelectElement>('step');
 const retentionHint = el<HTMLElement>('retentionHint');
 const retentionHintText = el<HTMLElement>('retentionHintText');
 const retentionSetting = el<HTMLButtonElement>('retentionSetting');
-const localTimeCheckbox = el<HTMLInputElement>('useLocalTime');
 
 function esc(s: unknown): string {
   return s == null
@@ -1083,17 +1082,10 @@ window.addEventListener('resize', () => {
   resizeTimer = window.setTimeout(resizeCharts, 150);
 });
 
-localTimeCheckbox.addEventListener('change', () => {
-  useLocalTime = localTimeCheckbox.checked;
-  apply();
-  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
-});
-
 window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     useLocalTime = m.useLocalTime;
-    localTimeCheckbox.checked = useLocalTime;
     apply();
     return;
   }

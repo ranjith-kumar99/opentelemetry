@@ -131,7 +131,6 @@ const corrChip = byId<HTMLSpanElement>('corrChip');
 const corrLabel = byId<HTMLSpanElement>('corrLabel');
 const corrClear = byId<HTMLButtonElement>('corrClear');
 const viewTraceBtn = byId<HTMLButtonElement>('viewTrace');
-const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
 
 function byId<T extends HTMLElement>(id: string): T {
   return document.getElementById(id) as T;
@@ -433,13 +432,6 @@ rowsEl.addEventListener('scroll', () => {
     // Repaint only once the viewport approaches the edge of the rendered window.
     if (indexAt(top) < winStart + 2 || indexAt(top + viewH) > winEnd - 2) paint();
   });
-});
-
-localTimeCheckbox.addEventListener('change', () => {
-  localTime = localTimeCheckbox.checked;
-  paint();
-  updateRetentionHint();
-  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 
 // --- Column resizing -----------------------------------------------------------------
@@ -1139,7 +1131,6 @@ window.addEventListener('message', (e: MessageEvent) => {
   };
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     localTime = m.useLocalTime;
-    localTimeCheckbox.checked = localTime;
     paint();
     updateRetentionHint();
     return;
