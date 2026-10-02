@@ -52,6 +52,15 @@ ${externalScripts}
 
 // --- Time zone toggle, shared by the Logs, Traces and Metrics panels ----------------------
 
+// The saved value is rendered into the HTML so the first paint already uses it, instead of
+// showing local time until the host's first timeZone message arrives.
+export function localTimeToggle(checked: boolean): string {
+  return (
+    '<label class="timezone-toggle" title="Uncheck to display timestamps in UTC">' +
+    `<input id="useLocalTime" type="checkbox"${checked ? ' checked' : ''} /> Use local time</label>`
+  );
+}
+
 export function postTimeZone(webview: vscode.Webview): void {
   void webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
 }

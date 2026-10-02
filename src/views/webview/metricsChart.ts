@@ -96,7 +96,6 @@ type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
-let useLocalTime = true;
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
@@ -145,6 +144,8 @@ const retentionHint = el<HTMLElement>('retentionHint');
 const retentionHintText = el<HTMLElement>('retentionHintText');
 const retentionSetting = el<HTMLButtonElement>('retentionSetting');
 const localTimeCheckbox = el<HTMLInputElement>('useLocalTime');
+// The host renders the saved setting into the checkbox.
+let useLocalTime = localTimeCheckbox.checked;
 
 function esc(s: unknown): string {
   return s == null

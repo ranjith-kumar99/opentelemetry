@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { useLocalTime } from '../settings';
 import { StoredLogRecord } from '../store/model';
 import { openCodeLocation } from './codeNav';
 import {
@@ -17,6 +18,7 @@ import {
   getNonce,
   getUri,
   htmlShell,
+  localTimeToggle,
   postTimeZone,
   saveTimeZone,
   watchTimeZone,
@@ -95,7 +97,7 @@ export class LogsPanel {
       'webview',
       'logsTable.js'
     );
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(watchTimeZone(this.panel.webview));
@@ -382,7 +384,7 @@ const STYLE = `${COLUMN_TABLE_CSS}
   .link:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 `;
 
-const BODY = `
+const bodyHtml = (localTime: boolean): string => `
 <div class="toolbar">
   <input id="q" type="text" placeholder="Filter text..." style="min-width:180px" />
   <select id="level" aria-label="Minimum severity"></select>
@@ -404,7 +406,7 @@ const BODY = `
   <button id="nav" class="secondary">Navigate To Code</button>
   <button id="viewTrace" class="secondary" title="Open the focused log's trace waterfall" disabled>View Trace</button>
   <button id="open" class="secondary">Open In Editor</button>
-  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
+  ${localTimeToggle(localTime)}
   <span id="count" class="count muted"></span>
 </div>
 <div id="retentionHint" class="hint" hidden>

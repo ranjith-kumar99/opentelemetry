@@ -1,8 +1,17 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { useLocalTime } from '../settings';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
-import { getNonce, getUri, htmlShell, postTimeZone, saveTimeZone, watchTimeZone } from './webviewUtil';
+import {
+  getNonce,
+  getUri,
+  htmlShell,
+  localTimeToggle,
+  postTimeZone,
+  saveTimeZone,
+  watchTimeZone,
+} from './webviewUtil';
 
 export class MetricsPanel {
   private static panels = new Map<string, MetricsPanel>();
@@ -34,7 +43,7 @@ export class MetricsPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(this.panel.webview, controller.extensionUri, 'dist', 'webview', 'metricsChart.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
       if (m?.type === 'ready') {
@@ -272,7 +281,7 @@ const STYLE = `
   table.mini td { padding: 2px 4px; border-bottom: 1px solid var(--vscode-panel-border); overflow: hidden; text-overflow: ellipsis; }
 `;
 
-const BODY = `
+const bodyHtml = (localTime: boolean): string => `
 <div class="toolbar">
   <input id="q" type="text" placeholder="Filter metric name…" style="min-width:200px" />
   <span class="seg" role="group" aria-label="View mode">
@@ -287,7 +296,7 @@ const BODY = `
   <span id="stepPicker" class="range-picker" style="display:none" title="Bucket width used by the Over time aggregation">
     <select id="step" aria-label="Aggregation step"></select>
   </span>
-  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
+  ${localTimeToggle(localTime)}
 </div>
 <div id="tableWrap" class="rows"><table><thead>
   <tr><th style="width:32%">Metric</th><th style="width:110px">Type</th><th style="width:70px">Unit</th><th>Data points (latest)</th></tr>

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
+import { useLocalTime } from '../settings';
 import { KeyValueMap } from '../store/model';
 import { TaggedSpan, TracePart } from '../store/store';
 import { openCodeLocation } from './codeNav';
@@ -20,6 +21,7 @@ import {
   getNonce,
   getUri,
   htmlShell,
+  localTimeToggle,
   postTimeZone,
   saveTimeZone,
   watchTimeZone,
@@ -102,7 +104,7 @@ export class TracesPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(panel.webview, controller.extensionUri, 'dist', 'webview', 'tracesTable.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(watchTimeZone(this.panel.webview));
@@ -434,7 +436,7 @@ const STYLE = `${COLUMN_TABLE_CSS}
   }
 `;
 
-const BODY = `
+const bodyHtml = (localTime: boolean): string => `
 <div class="toolbar">
   <select id="service" aria-label="Service"></select>
   <input id="name" type="text" placeholder="span name…" aria-label="Span name contains" style="width:140px" />
@@ -451,7 +453,7 @@ const BODY = `
     <select id="range" aria-label="Time range"></select>
   </span>
   <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
-  <label class="timezone-toggle" title="Uncheck to display timestamps in UTC"><input id="useLocalTime" type="checkbox" checked /> Use local time</label>
+  ${localTimeToggle(localTime)}
   <span id="count" class="count muted"></span>
 </div>
 <div class="toolbar query-bar">

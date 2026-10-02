@@ -81,7 +81,8 @@ const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
 const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
-let localTime = true;
+// The host renders the saved setting into the checkbox.
+let localTime = localTimeCheckbox.checked;
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(
