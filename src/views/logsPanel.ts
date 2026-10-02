@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setUseLocalTime, useLocalTime } from '../settings';
 import { StoredLogRecord } from '../store/model';
 import { openCodeLocation } from './codeNav';
 import {
@@ -13,7 +12,15 @@ import {
 import { serializeLog } from './logSerialize';
 import { isLogColumnId } from './webview/logColumns';
 import { WireLog } from './webview/logView';
-import { COLUMN_TABLE_CSS, getNonce, getUri, htmlShell } from './webviewUtil';
+import {
+  COLUMN_TABLE_CSS,
+  getNonce,
+  getUri,
+  htmlShell,
+  postTimeZone,
+  saveTimeZone,
+  watchTimeZone,
+} from './webviewUtil';
 
 // Settings the webview may ask the host to reveal; never pass through an arbitrary key.
 const OPENABLE_SETTINGS = new Set(['otel.retention.maxLogsPerInstance']);
@@ -91,11 +98,7 @@ export class LogsPanel {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
-    this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
-      })
-    );
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }
@@ -140,7 +143,7 @@ export class LogsPanel {
       useLocalTime?: unknown;
     };
     if (msg?.type === 'setTimeZone' && typeof msg.useLocalTime === 'boolean') {
-      await this.persistTimeZone(msg.useLocalTime);
+      await saveTimeZone(this.panel.webview, msg.useLocalTime);
     } else if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
       await this.navigateToCode(msg.seq);
     } else if (msg?.type === 'viewTrace' && Number.isInteger(msg.seq)) {
@@ -153,7 +156,7 @@ export class LogsPanel {
       await this.exportLogs(m as ExportRequest);
     } else if (msg?.type === 'ready') {
       this.ready = true;
-      this.postTimeZone();
+      postTimeZone(this.panel.webview);
       this.lastPostedSeq = typeof msg.lastSeq === 'number' && msg.lastSeq > 0 ? msg.lastSeq : 0;
       this.lastOldestSeq = -1;
       const inst = this.controller.store.getInstance(this.instanceId);
@@ -173,21 +176,6 @@ export class LogsPanel {
         this.postCorrelate(c);
       }
     }
-  }
-
-  private async persistTimeZone(value: boolean): Promise<void> {
-    try {
-      await setUseLocalTime(value);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    this.postTimeZone();
-  }
-
-  private postTimeZone(): void {
-    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
   }
 
   private correlate(c: LogsCorrelation): void {

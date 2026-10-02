@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setUseLocalTime, useLocalTime } from '../settings';
 import { KeyValueMap } from '../store/model';
 import { TaggedSpan, TracePart } from '../store/store';
 import { openCodeLocation } from './codeNav';
@@ -15,7 +14,16 @@ import {
   sanitizeAttrKeys,
   sanitizeQueryInput,
 } from './webview/traceView';
-import { COLUMN_TABLE_CSS, RANGE_ICON_SVG, getNonce, getUri, htmlShell } from './webviewUtil';
+import {
+  COLUMN_TABLE_CSS,
+  RANGE_ICON_SVG,
+  getNonce,
+  getUri,
+  htmlShell,
+  postTimeZone,
+  saveTimeZone,
+  watchTimeZone,
+} from './webviewUtil';
 
 export interface TraceFocus {
   traceId: string;
@@ -97,11 +105,7 @@ export class TracesPanel {
     this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri]);
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
-    this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
-      })
-    );
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.panel.onDidChangeViewState(
       () => {
         if (this.panel.active) TracesPanel.active = this;
@@ -205,7 +209,7 @@ export class TracesPanel {
       case 'ready':
         this.applyQuery(msg);
         this.ready = true;
-        this.postTimeZone();
+        postTimeZone(this.panel.webview);
         this.postList();
         if (this.pendingFocus) {
           const f = this.pendingFocus;
@@ -214,7 +218,7 @@ export class TracesPanel {
         }
         break;
       case 'setTimeZone':
-        if (typeof msg.useLocalTime === 'boolean') void this.persistTimeZone(msg.useLocalTime);
+        if (typeof msg.useLocalTime === 'boolean') void saveTimeZone(this.panel.webview, msg.useLocalTime);
         break;
       case 'viewLogs':
         void this.viewLogs(msg.traceId, msg.spanId);
@@ -237,21 +241,6 @@ export class TracesPanel {
         }
         break;
     }
-  }
-
-  private postTimeZone(): void {
-    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
-  }
-
-  private async persistTimeZone(value: boolean): Promise<void> {
-    try {
-      await setUseLocalTime(value);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    this.postTimeZone();
   }
 
   private async viewLogs(traceId: unknown, spanId: unknown): Promise<void> {

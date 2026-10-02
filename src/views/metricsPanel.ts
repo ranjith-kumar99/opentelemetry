@@ -1,9 +1,8 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { setUseLocalTime, useLocalTime } from '../settings';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
-import { getNonce, getUri, htmlShell } from './webviewUtil';
+import { getNonce, getUri, htmlShell, postTimeZone, saveTimeZone, watchTimeZone } from './webviewUtil';
 
 export class MetricsPanel {
   private static panels = new Map<string, MetricsPanel>();
@@ -39,19 +38,15 @@ export class MetricsPanel {
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
       if (m?.type === 'ready') {
-        this.postTimeZone();
+        postTimeZone(this.panel.webview);
         this.postData();
       } else if (m?.type === 'setTimeZone' && typeof m.useLocalTime === 'boolean') {
-        void this.persistTimeZone(m.useLocalTime);
+        void saveTimeZone(this.panel.webview, m.useLocalTime);
       } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
     }, null, this.disposables);
-    this.disposables.push(
-      vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
-      })
-    );
+    this.disposables.push(watchTimeZone(this.panel.webview));
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));
     this.postData();
   }
@@ -81,21 +76,6 @@ export class MetricsPanel {
         buckets: m.type === 'histogram' ? histogramBuckets(m) ?? undefined : undefined,
       }));
     this.panel.webview.postMessage({ type: 'data', metrics });
-  }
-
-  private postTimeZone(): void {
-    void this.panel.webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
-  }
-
-  private async persistTimeZone(value: boolean): Promise<void> {
-    try {
-      await setUseLocalTime(value);
-    } catch (error) {
-      void vscode.window.showErrorMessage(
-        `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
-    this.postTimeZone();
   }
 
   private dispose(): void {

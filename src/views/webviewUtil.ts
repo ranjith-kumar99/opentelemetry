@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
+import { setUseLocalTime, useLocalTime } from '../settings';
 
 export function getNonce(): string {
   return randomBytes(16).toString('base64url');
@@ -47,6 +48,32 @@ ${externalScripts}
 <script nonce="${nonce}">${scriptJs}</script>
 </body>
 </html>`;
+}
+
+// --- Time zone toggle, shared by the Logs, Traces and Metrics panels ----------------------
+
+export function postTimeZone(webview: vscode.Webview): void {
+  void webview.postMessage({ type: 'timeZone', useLocalTime: useLocalTime() });
+}
+
+// Re-posts the setting whenever it changes, from any panel or the Settings editor.
+export function watchTimeZone(webview: vscode.Webview): vscode.Disposable {
+  return vscode.workspace.onDidChangeConfiguration((e) => {
+    if (e.affectsConfiguration('otel.useLocalTime')) postTimeZone(webview);
+  });
+}
+
+// Saves a toggle from the webview. The saved value is always posted back, so a failed write
+// snaps the checkbox back instead of leaving it out of step with the view.
+export async function saveTimeZone(webview: vscode.Webview, value: boolean): Promise<void> {
+  try {
+    await setUseLocalTime(value);
+  } catch (error) {
+    void vscode.window.showErrorMessage(
+      `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
+    );
+  }
+  postTimeZone(webview);
 }
 
 const baseCss = `
