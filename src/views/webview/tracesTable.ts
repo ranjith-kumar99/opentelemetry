@@ -80,9 +80,8 @@ const columnsPanel = byId<HTMLDivElement>('columnsPanel');
 const colSearch = byId<HTMLInputElement>('colSearch');
 const colReset = byId<HTMLButtonElement>('colReset');
 const colList = byId<HTMLDivElement>('colList');
-const localTimeCheckbox = byId<HTMLInputElement>('useLocalTime');
-// The host renders the saved setting into the checkbox.
-let localTime = localTimeCheckbox.checked;
+// otel.useLocalTime: rendered onto <body> by the host, then kept current by timeZone messages.
+let localTime = document.body.dataset.localTime !== 'false';
 
 function esc(s: unknown): string {
   return String(s ?? '').replace(
@@ -312,12 +311,6 @@ rowsEl.addEventListener('scroll', () => {
     const last = Math.ceil((rowsEl.scrollTop + rowsEl.clientHeight) / rowH);
     if (first < winStart + 2 || last > winEnd - 2) paint();
   });
-});
-
-localTimeCheckbox.addEventListener('change', () => {
-  localTime = localTimeCheckbox.checked;
-  paint();
-  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
 });
 
 function ensureVisible(index: number): void {
@@ -654,7 +647,6 @@ window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data as ListMessage | TimeZoneMessage | WaterfallMessage;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     localTime = m.useLocalTime;
-    localTimeCheckbox.checked = localTime;
     paint();
     return;
   }

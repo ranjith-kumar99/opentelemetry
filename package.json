@@ -422,7 +422,7 @@
           "type": "boolean",
           "default": true,
           "scope": "application",
-          "description": "Show log, trace and metric chart timestamps in your local timezone instead of UTC."
+          "description": "Show timestamps in the Logs and Traces panels, on metric chart axes and in log exports in your local time zone, with its UTC offset. Turn off to use UTC."
         },
         "otel.launchOnStartup": {
           "type": "boolean",

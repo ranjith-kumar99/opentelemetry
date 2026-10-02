@@ -35,12 +35,6 @@ export function useLocalTime(): boolean {
   return vscode.workspace.getConfiguration('otel').get<boolean>('useLocalTime', true);
 }
 
-export async function setUseLocalTime(value: boolean): Promise<void> {
-  await vscode.workspace
-    .getConfiguration('otel')
-    .update('useLocalTime', value, vscode.ConfigurationTarget.Global);
-}
-
 export function readAiSettings(): AiSettings {
   const c = vscode.workspace.getConfiguration('otel');
   // Only the user-level value can enable AI access; workspace values are ignored even if present.

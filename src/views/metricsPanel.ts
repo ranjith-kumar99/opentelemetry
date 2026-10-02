@@ -1,15 +1,13 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { useLocalTime } from '../settings';
 import { KeyValueMap, Metric, MetricType } from '../store/model';
 import { presentedType } from './webview/chartTypes';
 import {
   getNonce,
   getUri,
   htmlShell,
-  localTimeToggle,
   postTimeZone,
-  saveTimeZone,
+  timeZoneData,
   watchTimeZone,
 } from './webviewUtil';
 
@@ -43,14 +41,12 @@ export class MetricsPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(this.panel.webview, controller.extensionUri, 'dist', 'webview', 'metricsChart.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneData());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => {
       if (m?.type === 'ready') {
         postTimeZone(this.panel.webview);
         this.postData();
-      } else if (m?.type === 'setTimeZone' && typeof m.useLocalTime === 'boolean') {
-        void saveTimeZone(this.panel.webview, m.useLocalTime);
       } else if (m?.type === 'openSetting' && typeof m.key === 'string') {
         void vscode.commands.executeCommand('workbench.action.openSettings', m.key);
       }
@@ -281,7 +277,7 @@ const STYLE = `
   table.mini td { padding: 2px 4px; border-bottom: 1px solid var(--vscode-panel-border); overflow: hidden; text-overflow: ellipsis; }
 `;
 
-const bodyHtml = (localTime: boolean): string => `
+const BODY = `
 <div class="toolbar">
   <input id="q" type="text" placeholder="Filter metric name…" style="min-width:200px" />
   <span class="seg" role="group" aria-label="View mode">
@@ -296,7 +292,6 @@ const bodyHtml = (localTime: boolean): string => `
   <span id="stepPicker" class="range-picker" style="display:none" title="Bucket width used by the Over time aggregation">
     <select id="step" aria-label="Aggregation step"></select>
   </span>
-  ${localTimeToggle(localTime)}
 </div>
 <div id="tableWrap" class="rows"><table><thead>
   <tr><th style="width:32%">Metric</th><th style="width:110px">Type</th><th style="width:70px">Unit</th><th>Data points (latest)</th></tr>

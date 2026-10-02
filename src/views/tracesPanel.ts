@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { OtelController } from '../controller';
-import { useLocalTime } from '../settings';
 import { KeyValueMap } from '../store/model';
 import { TaggedSpan, TracePart } from '../store/store';
 import { openCodeLocation } from './codeNav';
@@ -21,9 +20,8 @@ import {
   getNonce,
   getUri,
   htmlShell,
-  localTimeToggle,
   postTimeZone,
-  saveTimeZone,
+  timeZoneData,
   watchTimeZone,
 } from './webviewUtil';
 
@@ -104,7 +102,7 @@ export class TracesPanel {
     private readonly instanceId: string
   ) {
     const scriptUri = getUri(panel.webview, controller.extensionUri, 'dist', 'webview', 'tracesTable.js');
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneData());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(watchTimeZone(this.panel.webview));
@@ -218,9 +216,6 @@ export class TracesPanel {
           this.pendingFocus = undefined;
           this.postWaterfall(f.traceId, f.spanId);
         }
-        break;
-      case 'setTimeZone':
-        if (typeof msg.useLocalTime === 'boolean') void saveTimeZone(this.panel.webview, msg.useLocalTime);
         break;
       case 'viewLogs':
         void this.viewLogs(msg.traceId, msg.spanId);
@@ -436,7 +431,7 @@ const STYLE = `${COLUMN_TABLE_CSS}
   }
 `;
 
-const bodyHtml = (localTime: boolean): string => `
+const BODY = `
 <div class="toolbar">
   <select id="service" aria-label="Service"></select>
   <input id="name" type="text" placeholder="span name…" aria-label="Span name contains" style="width:140px" />
@@ -453,7 +448,6 @@ const bodyHtml = (localTime: boolean): string => `
     <select id="range" aria-label="Time range"></select>
   </span>
   <button id="columnsBtn" class="secondary" aria-haspopup="true" aria-expanded="false">Columns</button>
-  ${localTimeToggle(localTime)}
   <span id="count" class="count muted"></span>
 </div>
 <div class="toolbar query-bar">

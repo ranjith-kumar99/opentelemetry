@@ -1,6 +1,6 @@
 import { randomBytes } from 'crypto';
 import * as vscode from 'vscode';
-import { setUseLocalTime, useLocalTime } from '../settings';
+import { useLocalTime } from '../settings';
 
 export function getNonce(): string {
   return randomBytes(16).toString('base64url');
@@ -20,7 +20,8 @@ export function htmlShell(
   bodyHtml: string,
   scriptJs: string,
   styleCss: string,
-  scriptUris: vscode.Uri[] = []
+  scriptUris: vscode.Uri[] = [],
+  bodyData: Record<string, string> = {}
 ): string {
   const csp = [
     `default-src 'none'`,
@@ -33,6 +34,9 @@ export function htmlShell(
   const externalScripts = scriptUris
     .map((uri) => `<script nonce="${nonce}" src="${uri.toString()}"></script>`)
     .join('\n');
+  const dataAttrs = Object.entries(bodyData)
+    .map(([k, v]) => ` data-${k}="${v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`)
+    .join('');
 
   return `<!DOCTYPE html>
 <html lang="en">
@@ -42,7 +46,7 @@ export function htmlShell(
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>${baseCss}${styleCss}</style>
 </head>
-<body>
+<body${dataAttrs}>
 ${bodyHtml}
 ${externalScripts}
 <script nonce="${nonce}">${scriptJs}</script>
@@ -50,15 +54,12 @@ ${externalScripts}
 </html>`;
 }
 
-// --- Time zone toggle, shared by the Logs, Traces and Metrics panels ----------------------
+// --- otel.useLocalTime, shared by the Logs, Traces and Metrics panels --------------------
 
-// The saved value is rendered into the HTML so the first paint already uses it, instead of
-// showing local time until the host's first timeZone message arrives.
-export function localTimeToggle(checked: boolean): string {
-  return (
-    '<label class="timezone-toggle" title="Uncheck to display timestamps in UTC">' +
-    `<input id="useLocalTime" type="checkbox"${checked ? ' checked' : ''} /> Use local time</label>`
-  );
+// Rendered onto <body> as data-local-time so the first paint already uses the setting,
+// instead of waiting for the first timeZone message.
+export function timeZoneData(): Record<string, string> {
+  return { 'local-time': String(useLocalTime()) };
 }
 
 export function postTimeZone(webview: vscode.Webview): void {
@@ -70,19 +71,6 @@ export function watchTimeZone(webview: vscode.Webview): vscode.Disposable {
   return vscode.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration('otel.useLocalTime')) postTimeZone(webview);
   });
-}
-
-// Saves a toggle from the webview. The saved value is always posted back, so a failed write
-// snaps the checkbox back instead of leaving it out of step with the view.
-export async function saveTimeZone(webview: vscode.Webview, value: boolean): Promise<void> {
-  try {
-    await setUseLocalTime(value);
-  } catch (error) {
-    void vscode.window.showErrorMessage(
-      `Could not update local time preference: ${error instanceof Error ? error.message : String(error)}`
-    );
-  }
-  postTimeZone(webview);
 }
 
 const baseCss = `
@@ -112,11 +100,6 @@ const baseCss = `
     background: var(--vscode-input-background);
     border: 1px solid var(--vscode-input-border, var(--vscode-panel-border));
     padding: 3px 6px; border-radius: 2px;
-  }
-  input[type="checkbox"] { padding: 0; }
-  .timezone-toggle {
-    display: inline-flex; align-items: center; gap: 4px; white-space: nowrap;
-    color: var(--vscode-descriptionForeground); cursor: pointer;
   }
   button {
     background: var(--vscode-button-background);

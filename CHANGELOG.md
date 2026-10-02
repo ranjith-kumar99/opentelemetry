@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- Local timezone display for log and trace timestamps and metric chart axes, with a panel toggle to switch between local time and UTC. The default is local time.
+- `otel.useLocalTime` setting: show log and trace timestamps, metric chart axes and log exports in your local time zone or in UTC. Open panels update as soon as it changes. The default is local time.
 - **Save Session / Load Session**: save everything the receiver captured (traces, logs and metrics, including metric history) to one `.otel.json` file and load it back later. Each section of the file is a standard OTLP `Export*ServiceRequest`.
 - Save scopes: all data (**Save Session…** in the Instances toolbar), one instance (**Save Instance…** on an instance), one loaded file, or one trace with its correlated logs (**Export Trace…** when you right-click a row in the Traces panel).
 - **Load Session…** also accepts a bare OTLP/JSON request and OpenTelemetry Collector file-exporter JSON Lines, for example CI artifacts.
@@ -17,7 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
-- **Timestamps now default to your local time zone instead of UTC**, shown with the numeric UTC offset, in the Logs and Traces tables, metric chart axes, and CSV and grid JSON log exports. To keep UTC, uncheck **Use local time** in any of these panels or set `otel.useLocalTime` to `false`.
+- **Timestamps now default to your local time zone instead of UTC**, shown with the numeric UTC offset, in the Logs and Traces tables, metric chart axes, and CSV and grid JSON log exports. To keep UTC, set `otel.useLocalTime` to `false`.
 - Each loaded file is isolated: waterfalls, trace-to-log links and the service map join only data from the same file, and live views no longer mix in imported data. AI tools still read everything.
 - `otel.import.maxFileSize` and `otel.import.maxRecords` also apply to loaded sessions. For sessions, `maxRecords` counts spans, logs and metric points together.
 - OTLP/JSON log export now keeps sub-millisecond timestamps.

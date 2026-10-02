@@ -18,9 +18,8 @@ import {
   getNonce,
   getUri,
   htmlShell,
-  localTimeToggle,
   postTimeZone,
-  saveTimeZone,
+  timeZoneData,
   watchTimeZone,
 } from './webviewUtil';
 
@@ -97,7 +96,7 @@ export class LogsPanel {
       'webview',
       'logsTable.js'
     );
-    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), bodyHtml(useLocalTime()), '', STYLE, [scriptUri]);
+    this.panel.webview.html = htmlShell(this.panel.webview, getNonce(), BODY, '', STYLE, [scriptUri], timeZoneData());
     this.panel.onDidDispose(() => this.dispose(), null, this.disposables);
     this.panel.webview.onDidReceiveMessage((m) => this.onMessage(m), null, this.disposables);
     this.disposables.push(watchTimeZone(this.panel.webview));
@@ -142,11 +141,8 @@ export class LogsPanel {
       lastSeq?: number;
       key?: string;
       scope?: string;
-      useLocalTime?: unknown;
     };
-    if (msg?.type === 'setTimeZone' && typeof msg.useLocalTime === 'boolean') {
-      await saveTimeZone(this.panel.webview, msg.useLocalTime);
-    } else if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
+    if (msg?.type === 'navigate' && typeof msg.seq === 'number') {
       await this.navigateToCode(msg.seq);
     } else if (msg?.type === 'viewTrace' && Number.isInteger(msg.seq)) {
       await this.viewTrace(msg.seq as number, msg.scope === 'span');
@@ -387,7 +383,7 @@ const STYLE = `${COLUMN_TABLE_CSS}
   .link:focus-visible { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
 `;
 
-const bodyHtml = (localTime: boolean): string => `
+const BODY = `
 <div class="toolbar">
   <input id="q" type="text" placeholder="Filter text..." style="min-width:180px" />
   <select id="level" aria-label="Minimum severity"></select>
@@ -409,7 +405,6 @@ const bodyHtml = (localTime: boolean): string => `
   <button id="nav" class="secondary">Navigate To Code</button>
   <button id="viewTrace" class="secondary" title="Open the focused log's trace waterfall" disabled>View Trace</button>
   <button id="open" class="secondary">Open In Editor</button>
-  ${localTimeToggle(localTime)}
   <span id="count" class="count muted"></span>
 </div>
 <div id="retentionHint" class="hint" hidden>

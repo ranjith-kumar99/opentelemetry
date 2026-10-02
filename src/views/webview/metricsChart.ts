@@ -96,6 +96,8 @@ type XRange = [number, number];
 
 let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
+// otel.useLocalTime: rendered onto <body> by the host, then kept current by timeZone messages.
+let useLocalTime = document.body.dataset.localTime !== 'false';
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
@@ -143,9 +145,6 @@ const stepSel = el<HTMLSelectElement>('step');
 const retentionHint = el<HTMLElement>('retentionHint');
 const retentionHintText = el<HTMLElement>('retentionHintText');
 const retentionSetting = el<HTMLButtonElement>('retentionSetting');
-const localTimeCheckbox = el<HTMLInputElement>('useLocalTime');
-// The host renders the saved setting into the checkbox.
-let useLocalTime = localTimeCheckbox.checked;
 
 function esc(s: unknown): string {
   return s == null
@@ -1086,17 +1085,10 @@ window.addEventListener('resize', () => {
   resizeTimer = window.setTimeout(resizeCharts, 150);
 });
 
-localTimeCheckbox.addEventListener('change', () => {
-  useLocalTime = localTimeCheckbox.checked;
-  apply();
-  vscode.postMessage({ type: 'setTimeZone', useLocalTime: localTimeCheckbox.checked });
-});
-
 window.addEventListener('message', (e: MessageEvent) => {
   const m = e.data;
   if (m?.type === 'timeZone' && typeof m.useLocalTime === 'boolean') {
     useLocalTime = m.useLocalTime;
-    localTimeCheckbox.checked = useLocalTime;
     apply();
     return;
   }

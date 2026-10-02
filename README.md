@@ -62,7 +62,7 @@ observability backend. You can also send data to both at once (see [Apps running
 
 - Gauges, counters and sums, histograms, and summaries per instance.
 - A table or graph view, with chart type, over-time aggregation, and series roll-up per metric.
-- Choose local time or UTC for timestamps in Logs and Traces and on metric chart axes; local time is the default.
+- Timestamps in Logs and Traces, on metric chart axes and in log exports use your local time zone by default; set `otel.useLocalTime` to `false` for UTC.
 
 ### Service map
 
@@ -366,7 +366,7 @@ Instances in the tree also expose inline **Logs / Traces / Metrics** icons and a
 | `otel.port.http` | `4318` | OTLP/HTTP port (fixed mode). |
 | `otel.host` | `127.0.0.1` | Bind address. Binding beyond localhost exposes telemetry. |
 | `otel.overwriteEnvVars` | `true` | Inject the OTLP endpoint into launch/debug configs. |
-| `otel.useLocalTime` | `true` | Show Logs, Traces, and metric chart timestamps in your local timezone instead of UTC. |
+| `otel.useLocalTime` | `true` | Show timestamps in Logs, Traces, metric chart axes and log exports in your local time zone, with its UTC offset. Set to `false` for UTC. Open panels update immediately. |
 | `otel.retention.maxLogsPerInstance` | `5000` | Log retention cap per instance. |
 | `otel.retention.maxTracesPerInstance` | `2000` | Trace retention cap per instance. |
 | `otel.retention.maxMetricPointsPerSeries` | `500` | Metric time-series points retained per series (controls graph history depth). |
