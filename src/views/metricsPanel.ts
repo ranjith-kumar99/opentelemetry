@@ -49,7 +49,7 @@ export class MetricsPanel {
     }, null, this.disposables);
     this.disposables.push(
       vscode.workspace.onDidChangeConfiguration((e) => {
-        if (e.affectsConfiguration('otel.uselocaltime')) this.postTimeZone();
+        if (e.affectsConfiguration('otel.useLocalTime')) this.postTimeZone();
       })
     );
     this.disposables.push(this.controller.store.onDidChange(() => this.postData()));

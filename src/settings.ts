@@ -32,13 +32,13 @@ export function readSettings(): OtelSettings {
 }
 
 export function useLocalTime(): boolean {
-  return vscode.workspace.getConfiguration('otel').get<boolean>('uselocaltime', true);
+  return vscode.workspace.getConfiguration('otel').get<boolean>('useLocalTime', true);
 }
 
 export async function setUseLocalTime(value: boolean): Promise<void> {
   await vscode.workspace
     .getConfiguration('otel')
-    .update('uselocaltime', value, vscode.ConfigurationTarget.Global);
+    .update('useLocalTime', value, vscode.ConfigurationTarget.Global);
 }
 
 export function readAiSettings(): AiSettings {
