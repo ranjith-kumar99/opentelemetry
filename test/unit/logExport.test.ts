@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import { StoredLogRecord } from '../../src/store/model';
+import { formatTimestamp } from '../../src/views/format';
 import {
   attributeKeyUnion,
   csvCell,
@@ -114,7 +115,7 @@ describe('export: OTLP/JSON', () => {
 
 describe('export: plain JSON', () => {
   it('emits a full-fidelity envelope in all-attributes mode', () => {
-    const out = JSON.parse(exportPlainJson([log(1, { attrs: { a: 1 } })], instance, 'all', []));
+    const out = JSON.parse(exportPlainJson([log(1, { attrs: { a: 1 } })], instance, 'all', [], false));
     assert.strictEqual(out.version, 1);
     assert.strictEqual(out.instance.serviceName, 'svc');
     assert.deepStrictEqual(out.logs[0].attributes, { a: 1 });
@@ -124,7 +125,7 @@ describe('export: plain JSON', () => {
 
   it('emits only the visible columns in grid mode', () => {
     const out = JSON.parse(
-      exportPlainJson([log(1)], instance, 'grid', ['time', 'level', 'message'])
+      exportPlainJson([log(1)], instance, 'grid', ['time', 'level', 'message'], false)
     );
     assert.deepStrictEqual(Object.keys(out.logs[0]), ['Time', 'Level', 'Message']);
     assert.strictEqual(out.logs[0].Message, 'm1');
@@ -135,8 +136,20 @@ describe('export: plain JSON', () => {
   });
 
   it('never emits the selection checkbox column', () => {
-    const out = JSON.parse(exportPlainJson([log(1)], instance, 'grid', ['select', 'message']));
+    const out = JSON.parse(exportPlainJson([log(1)], instance, 'grid', ['select', 'message'], false));
     assert.deepStrictEqual(Object.keys(out.logs[0]), ['Message']);
+  });
+
+  it('writes grid-mode times in the chosen time zone', () => {
+    const utc = JSON.parse(exportPlainJson([log(1)], instance, 'grid', ['time'], false));
+    const local = JSON.parse(exportPlainJson([log(1)], instance, 'grid', ['time'], true));
+    assert.strictEqual(utc.logs[0].Time, '1970-01-01T00:00:01.000Z');
+    assert.strictEqual(local.logs[0].Time, formatTimestamp(1000, true));
+  });
+
+  it('keeps UTC in all-attributes mode so the file can be imported again', () => {
+    const out = JSON.parse(exportPlainJson([log(1)], instance, 'all', [], true));
+    assert.strictEqual(out.logs[0].time, '1970-01-01T00:00:01.000Z');
   });
 });
 
@@ -161,7 +174,7 @@ describe('export: CSV', () => {
   });
 
   it('writes a header of column labels in grid mode', () => {
-    const csv = exportCsv([log(1)], 'grid', ['time', 'level', 'message']);
+    const csv = exportCsv([log(1)], 'grid', ['time', 'level', 'message'], false);
     const [header, row] = csv.split('\r\n');
     assert.strictEqual(header, 'Time,Level,Message');
     assert.ok(row.endsWith(',INFO,m1'));
@@ -171,7 +184,8 @@ describe('export: CSV', () => {
     const csv = exportCsv(
       [log(1, { attrs: { a: 1 } }), log(2, { attrs: { b: 2 } })],
       'all',
-      []
+      [],
+      false
     );
     const [header, first, second] = csv.split('\r\n');
     assert.ok(header.endsWith('attr.a,attr.b'));
@@ -186,8 +200,15 @@ describe('export: CSV', () => {
     );
   });
 
+  it('writes times in the chosen time zone', () => {
+    assert.strictEqual(exportCsv([log(1)], 'grid', ['time'], false).split('\r\n')[1], '1970-01-01T00:00:01.000Z');
+    assert.strictEqual(exportCsv([log(1)], 'grid', ['time'], true).split('\r\n')[1], formatTimestamp(1000, true));
+    const allRow = exportCsv([log(1)], 'all', [], true).split('\r\n')[1];
+    assert.ok(allRow.startsWith(formatTimestamp(1000, true) + ','));
+  });
+
   it('uses CRLF line endings per RFC 4180', () => {
-    assert.ok(exportCsv([log(1)], 'grid', ['message']).includes('\r\n'));
+    assert.ok(exportCsv([log(1)], 'grid', ['message'], false).includes('\r\n'));
   });
 });
 

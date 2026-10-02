@@ -250,6 +250,8 @@ export class LogsPanel {
       return;
     }
 
+    // Read before the save dialog so the file matches what the user saw when they clicked Export.
+    const localTime = useLocalTime();
     const fileName = defaultExportFileName(inst.serviceName, format);
     const folder = vscode.workspace.workspaceFolders?.[0];
     const uri = await vscode.window.showSaveDialog({
@@ -271,7 +273,8 @@ export class LogsPanel {
             resourceAttrs: inst.resourceAttrs,
           },
           mode,
-          columns
+          columns,
+          localTime
         );
         await vscode.workspace.fs.writeFile(uri, Buffer.from(text, 'utf8'));
       }
