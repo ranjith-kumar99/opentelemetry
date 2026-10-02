@@ -1,7 +1,6 @@
 // Bundled webview app for the Metrics panel. Built by esbuild into dist/webview/metricsChart.js
 // and loaded by MetricsPanel. Owns the toolbar, table view, and uPlot graph view.
 import uPlot from 'uplot';
-import { formatChartTime } from '../format';
 import {
   AGG_LABEL,
   AggKind,
@@ -98,6 +97,13 @@ let metrics: MetricVM[] = [];
 let view: 'table' | 'graph' = 'table';
 // The host renders the initial timezone choice on <body>; later changes arrive as `timeZone` messages.
 let useLocalTime = document.body.dataset.useLocalTime !== 'false';
+
+// uPlot both places and labels time-axis ticks in the zone of the Date this returns.
+function chartDate(ts: number): Date {
+  const d = new Date(ts * 1000);
+  return useLocalTime ? d : uPlot.tzDate(d, 'Etc/UTC');
+}
+
 // One active uPlot per metric card, so a single card can re-render on its own.
 // `sig` gates the setData fast path; `xRange` is a mutable box the chart's x-scale
 // closure reads, so the window can slide without rebuilding the plot.
@@ -520,15 +526,10 @@ function drawLine(
     width,
     height: 180,
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     legend: { show: false },
     axes: [
-      {
-        stroke,
-        grid: { stroke: grid },
-        ticks: { stroke: grid },
-        values: (_u, splits) =>
-          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
-      },
+      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [
@@ -558,15 +559,10 @@ function drawStackedArea(container: HTMLElement, g: LineGraph, xRange: XRange): 
     width,
     height: 180,
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     legend: { show: false },
     axes: [
-      {
-        stroke,
-        grid: { stroke: grid },
-        ticks: { stroke: grid },
-        values: (_u, splits) =>
-          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
-      },
+      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [
@@ -603,14 +599,9 @@ function drawTimeBars(container: HTMLElement, g: LineGraph, xRange: XRange): uPl
     height: 180,
     legend: { show: false },
     scales: { x: { time: true, range: () => xRange } },
+    tzDate: chartDate,
     axes: [
-      {
-        stroke,
-        grid: { stroke: grid },
-        ticks: { stroke: grid },
-        values: (_u, splits) =>
-          splits.map((s) => formatChartTime(s * 1000, useLocalTime, RANGE_SECONDS[range] >= 86400)),
-      },
+      { stroke, grid: { stroke: grid }, ticks: { stroke: grid } },
       { stroke, size: 52, grid: { stroke: grid }, ticks: { stroke: grid }, values: (_u, splits) => splits.map(fmtCompact) },
     ],
     series: [

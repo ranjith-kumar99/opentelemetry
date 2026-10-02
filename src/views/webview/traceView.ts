@@ -173,7 +173,7 @@ export function sortTraces(rows: TraceRow[], sort: TraceSort): TraceRow[] {
 
 // --- Cell text -------------------------------------------------------------------------
 
-export function traceCellText(r: TraceRow, col: TraceColumnId, useLocalTime = true): string {
+export function traceCellText(r: TraceRow, col: TraceColumnId, useLocalTime: boolean): string {
   const key = cols.parseAttrColumn(col);
   if (key !== undefined) return r.rootAttrs?.[key] ?? '';
   switch (col) {

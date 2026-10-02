@@ -1,5 +1,16 @@
 import * as assert from 'assert';
-import { formatChartTime, formatTimestamp } from '../../src/views/format';
+import { formatTimestamp } from '../../src/views/format';
+
+// Fixes the offset formatTimestamp reads, so these cases run the same in any machine timezone.
+function withTimezoneOffset<T>(minutesWest: number, fn: () => T): T {
+  const original = Date.prototype.getTimezoneOffset;
+  Date.prototype.getTimezoneOffset = () => minutesWest;
+  try {
+    return fn();
+  } finally {
+    Date.prototype.getTimezoneOffset = original;
+  }
+}
 
 describe('timestamp formatting', () => {
   it('formats UTC timestamps as ISO strings', () => {
@@ -18,12 +29,17 @@ describe('timestamp formatting', () => {
     assert.strictEqual(formatTimestamp(0, true), expected);
   });
 
-  it('uses UTC for metric chart labels when local time is disabled', () => {
-    const expected = new Intl.DateTimeFormat(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      timeZone: 'UTC',
-    }).format(new Date(0));
-    assert.strictEqual(formatChartTime(0, false, false), expected);
+  it('writes positive, negative and half-hour offsets', () => {
+    // getTimezoneOffset() counts minutes west of UTC, so India (+05:30) is -330.
+    const cases: [number, string][] = [
+      [-330, '1970-01-01T05:30:00.000+05:30'], // India
+      [-345, '1970-01-01T05:45:00.000+05:45'], // Nepal
+      [300, '1969-12-31T19:00:00.000-05:00'], // New York, winter
+      [210, '1969-12-31T20:30:00.000-03:30'], // Newfoundland, winter
+      [0, '1970-01-01T00:00:00.000+00:00'],
+    ];
+    for (const [minutesWest, expected] of cases) {
+      assert.strictEqual(withTimezoneOffset(minutesWest, () => formatTimestamp(0, true)), expected);
+    }
   });
 });

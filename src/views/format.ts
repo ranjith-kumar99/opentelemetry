@@ -25,23 +25,6 @@ export function formatTimestamp(ms: number, useLocalTime: boolean): string {
   return new Date(ms + offset * 60000).toISOString().slice(0, -1) + zone;
 }
 
-const chartTimeFormats = new Map<number, Intl.DateTimeFormat>();
-
-export function formatChartTime(ms: number, useLocalTime: boolean, includeDate: boolean): string {
-  const key = (useLocalTime ? 1 : 0) | (includeDate ? 2 : 0);
-  let formatter = chartTimeFormats.get(key);
-  if (!formatter) {
-    formatter = new Intl.DateTimeFormat(undefined, {
-      hour: '2-digit',
-      minute: '2-digit',
-      ...(includeDate ? { month: 'short', day: 'numeric' } : {}),
-      ...(useLocalTime ? {} : { timeZone: 'UTC' }),
-    });
-    chartTimeFormats.set(key, formatter);
-  }
-  return formatter.format(ms);
-}
-
 export function shortId(id: string, len = 8): string {
   return id.length > len ? id.slice(0, len) : id;
 }

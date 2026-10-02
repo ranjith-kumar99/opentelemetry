@@ -1,6 +1,7 @@
 // Logs table webview app. Owns all DOM work for the logs panel; every value that reaches the
 // DOM goes through esc(). Pure view logic lives in logColumns.ts / logView.ts.
 
+import { formatTimestamp } from '../format';
 import {
   ATTR_KEY_LIMIT,
   GROUP_LABEL,
@@ -46,7 +47,6 @@ import {
   severityClass,
   sortLogs,
 } from './logView';
-import { formatTimestamp } from '../format';
 
 interface VsCodeApi {
   postMessage(msg: unknown): void;
