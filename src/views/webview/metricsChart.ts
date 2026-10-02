@@ -789,8 +789,10 @@ function kindData(
 }
 
 // Everything baked into a uPlot at construction time: the kind, the pipeline that shaped
-// the data, and the series/category set. While this is stable a data push only needs
-// setData, which leaves the card's DOM, focus and scroll position untouched.
+// the data, the series/category set and the time zone. While this is stable a data push
+// only needs setData, which leaves the card's DOM, focus and scroll position untouched.
+// setData does not re-run the x-axis label formatter unless the range moves, so a time
+// zone switch has to rebuild the chart.
 function renderSig(
   m: MetricVM,
   kind: ChartKind,
@@ -798,7 +800,7 @@ function renderSig(
   reduce: ReduceKind,
   wline: LineGraph | undefined
 ): string {
-  const parts: string[] = [kind, agg, reduce];
+  const parts: string[] = [kind, agg, reduce, useLocalTime ? 'local' : 'utc'];
   const g = wline && wline.xs.length > 0 ? wline : undefined;
   parts.push(g ? '1' : '0');
   if (kind === 'histogram') parts.push((m.bars?.categories ?? []).join('\u0001'));
