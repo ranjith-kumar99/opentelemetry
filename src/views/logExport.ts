@@ -74,7 +74,8 @@ export function exportPlainJson(
   };
 
   if (mode === 'all') {
-    return JSON.stringify({ ...envelope, logs: records.map(serializeLog) }, null, 2);
+    // Full records keep UTC times whatever the display setting, like the OTLP export.
+    return JSON.stringify({ ...envelope, logs: records.map((l) => serializeLog(l, false)) }, null, 2);
   }
 
   // Grid mode mirrors what the table shows, keyed by column label.

@@ -207,7 +207,7 @@ export class LogsPanel {
     if (!log) return;
     const doc = await vscode.workspace.openTextDocument({
       language: 'json',
-      content: JSON.stringify(serializeLog(log), null, 2),
+      content: JSON.stringify(serializeLog(log, useLocalTime()), null, 2),
     });
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Beside);
   }
